@@ -1,0 +1,64 @@
+{
+  "panzer": {
+    "name": "Panzer",
+    "colors": { "body": "#b03a30", "trim": "#6b6248", "skin": "#e2b49a", "blade": "#b98d5e" },
+    "heightScale": 0.86,
+    "bulk": 1.45,
+    "walkSpeed": 2.3,
+    "dashSpeed": 5.5,
+    "weapon": "katana",
+    "glasses": true,
+    "shape": {
+      "belly": 1.55,
+      "chest": 1.2,
+      "shoulders": 0.95,
+      "neck": 0.6,
+      "head": "wide",
+      "hair": "topknot",
+      "hairColor": "#1a1a1a",
+      "nose": 1.3,
+      "beard": true
+    },
+    "outfit": {
+      "style": "street",
+      "sleeves": "short",
+      "legs": "shorts",
+      "shoes": "#3a3f4a",
+      "socks": "#ece8de",
+      "emblem": "star",
+      "emblemColor": "#f2d24a",
+      "headband": "#ece6da",
+      "headbandMark": "#c0302a"
+    }
+  },
+  "sticchio": {
+    "name": "Sticchio",
+    "colors": { "body": "#2456a8", "trim": "#34466a", "skin": "#dcc2a2", "blade": "#c9a23c" },
+    "heightScale": 1.14,
+    "bulk": 0.62,
+    "walkSpeed": 2.05,
+    "dashSpeed": 5.0,
+    "weapon": "naginata",
+    "glasses": true,
+    "shape": {
+      "belly": 0.85,
+      "chest": 0.85,
+      "shoulders": 0.85,
+      "neck": 1.5,
+      "head": "long",
+      "hair": "messy",
+      "hairColor": "#4a2e1a",
+      "nose": 1.6
+    },
+    "outfit": {
+      "style": "street",
+      "sleeves": "short",
+      "legs": "jeans",
+      "shoes": "#c8322c",
+      "emblem": "ring",
+      "emblemColor": "#f2d24a",
+      "headband": "#ece6da",
+      "headbandMark": "#c0302a"
+    }
+  }
+}

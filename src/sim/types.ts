@@ -1,0 +1,207 @@
+export type Line = 'high' | 'mid' | 'low';
+export const LINES: Line[] = ['high', 'mid', 'low'];
+
+export interface MoveDef {
+  name: string;
+  line: Line;
+  windup: number;   // frames
+  active: number;   // frames
+  recovery: number; // frames
+  reach: number;    // meters, from body center
+  arcDeg: number;   // horizontal arc the blade covers
+  lunge: number;    // forward speed (m/s) applied late-windup + active
+  minReach?: number; // inside this, hits only glance (polearm haft dead zone)
+}
+
+export type MoveTable = Record<Line, MoveDef>;
+
+export interface WeaponDef {
+  name: string;
+  bladeLength: number;
+  shaftLength: number; // 0 = one-handed-ish sword; >0 = polearm
+  look?: 'tube' | 'broom'; // improvised-weapon visual override (render only)
+  moves: MoveTable;
+}
+
+export interface CharacterDef {
+  name: string;
+  colors: { body: string; trim: string; skin: string; blade: string };
+  heightScale: number;
+  bulk: number;
+  walkSpeed: number;
+  dashSpeed: number;
+  weapon: string; // key into weapons.json
+  glasses?: boolean; // render only: thick spectacles bar on the face
+  shape?: CharacterShape; // render only: silhouette details
+  outfit?: CharacterOutfit; // render only: clothes (default: gi)
+}
+
+/**
+ * Render-only clothing. `style: "street"` = what they wore to the shop:
+ * colors.body is the shirt, colors.trim the trousers. `style: "gi"` (the
+ * default) is the old kimono/hakama look. Never touches the sim.
+ */
+export interface CharacterOutfit {
+  style?: 'street' | 'gi';
+  sleeves?: 'short' | 'long';
+  legs?: 'shorts' | 'jeans';
+  shoes?: string;      // sneaker upper color (soles are always white)
+  socks?: string;      // visible with shorts
+  emblem?: 'star' | 'bolt' | 'dpad' | 'ring'; // chest print
+  emblemColor?: string;
+  headband?: string;   // hachimaki color; omit for none
+  headbandMark?: string; // the rising-sun dot on the forehead
+}
+
+/**
+ * Render-only silhouette knobs. None of these touch the sim; change them
+ * freely when reskinning. Multipliers are 1 = neutral.
+ */
+export interface CharacterShape {
+  belly?: number;      // 1 flat, 1.5 paunch, 0.8 concave
+  chest?: number;      // barrel chest
+  shoulders?: number;  // shoulder shelf width
+  neck?: number;       // neck length multiplier
+  head?: 'round' | 'long' | 'wide' | 'block';
+  hair?: 'topknot' | 'bowl' | 'messy' | 'ponytail' | 'bald';
+  hairColor?: string;
+  nose?: number;       // 0 = none, 1 = normal, 1.6 = honker
+  beard?: boolean;
+  eyes?: boolean;      // eyes behind the specs (default true; false = none)
+}
+
+/**
+ * Render-only scenery box. pos is [x, baseY, z] — y is the prop's BASE
+ * (it sits on baseY), rot is yaw in degrees. Only `solid` props reach the
+ * sim (as obstacles); the rest is set dressing.
+ */
+export interface StageProp {
+  pos: [number, number, number];
+  size: [number, number, number];
+  color: string;
+  rot?: number;
+  emissive?: string; // glow, for CRT screens / signs
+  solid?: boolean;   // fighters (and ragdolls) collide with it
+  knockable?: boolean; // cardboard: topples on body contact instead of blocking
+}
+
+/** Yaw-rotated box collider derived from a solid StageProp. */
+export interface Obstacle {
+  x: number; z: number;
+  halfW: number; halfD: number;
+  y0: number; y1: number; // vertical extent (sim ignores; ragdoll uses)
+  c: number; s: number;   // precomputed cos/sin of yaw
+  knockable?: boolean;    // topples on contact; state lives in SimState
+}
+
+/** Dynamic state for one knockable obstacle (indexed like cfg.obstacles). */
+export interface ObstacleState {
+  down: boolean;
+  fx: number; fz: number; // world fall direction (away from the toppler)
+  downFrame: number;      // sim.frame when it fell, for the topple animation
+}
+
+export function obstaclesFromStage(props: StageProp[] | undefined): Obstacle[] {
+  return (props ?? []).filter((p) => p.solid).map((p) => {
+    const a = ((p.rot ?? 0) * Math.PI) / 180;
+    return {
+      x: p.pos[0], z: p.pos[2],
+      halfW: p.size[0] / 2, halfD: p.size[2] / 2,
+      y0: p.pos[1], y1: p.pos[1] + p.size[1],
+      c: Math.cos(a), s: Math.sin(a),
+      knockable: p.knockable,
+    };
+  });
+}
+
+/**
+ * The room's four walls as thick box colliders (render-side ragdolls only;
+ * the sim clamps fighters to the square via `SimConfig.arenaHalf`).
+ */
+export function wallObstacles(w: StageWalls | undefined): Obstacle[] {
+  if (!w) return [];
+  const t = 0.5, o = w.halfSize + t, span = w.halfSize + 2 * t;
+  const box = (x: number, z: number, halfW: number, halfD: number): Obstacle => ({
+    x, z, halfW, halfD, y0: 0, y1: w.height, c: 1, s: 0,
+  });
+  return [box(0, o, span, t), box(0, -o, span, t), box(o, 0, t, span), box(-o, 0, t, span)];
+}
+
+export interface StageDef {
+  name: string;
+  radius: number;      // circular arena (used only when there are no walls)
+  gridSize: number;
+  gridDivisions: number;
+  gridColor: string;
+  ringColor: string;
+  fogColor: string;
+  fogNear: number;
+  fogFar: number;
+  floorColor?: string; // solid floor disc under the grid
+  floorTile?: string;  // second checker color: tiles the floor (replaces the grid)
+  tileSize?: number;   // checker tile edge in meters (default 0.6)
+  walls?: StageWalls;  // room box: its walls ARE the arena boundary
+  props?: StageProp[];
+}
+
+/**
+ * Square room that is the arena: fighters are clamped to `halfSize` (minus
+ * body radius) and ragdolls bounce off the walls. Four inward-facing walls,
+ * so whichever wall is between the camera and the fight is back-face culled
+ * (dollhouse cutaway). Props should sit inside `halfSize`, flush to a wall.
+ */
+export interface StageWalls {
+  halfSize: number;
+  height: number;
+  color: string;
+  trim?: string; // wainscot / baseboard color (lower band)
+}
+
+/** One tick of intent for one fighter. attack/dash are edge-triggered. */
+export interface InputFrame {
+  moveX: number;          // -1..1 strafe (circle around opponent)
+  moveY: number;          // -1..1 toward/away from opponent
+  attack: boolean;
+  dash: boolean;
+  parry: boolean;
+  stance: Line | null;    // direct stance select, null = keep
+}
+
+export const EMPTY_INPUT: InputFrame = {
+  moveX: 0, moveY: 0, attack: false, dash: false, parry: false, stance: null,
+};
+
+export type FighterPhase =
+  | 'idle' | 'windup' | 'active' | 'recovery'
+  | 'parry' | 'stagger' | 'flinch' | 'dead';
+
+export type WoundRegion = 'arm' | 'leg';
+
+export interface FighterState {
+  pos: { x: number; z: number };
+  facing: number;         // yaw; rotation.y = facing points +Z at opponent
+  stance: Line;
+  phase: FighterPhase;
+  phaseFrame: number;
+  move: MoveDef | null;
+  didHit: boolean;        // this attack already resolved (hit or deflected)
+  dashVec: { x: number; z: number };
+  dashLeft: number;
+  dashCooldown: number;
+  walkCycle: number;      // accumulated distance, drives leg swing in the view
+  wounds: Record<WoundRegion, boolean>;
+  staggerLen: number;     // frames for the current stagger (parried = longer)
+  score: number;
+}
+
+export type RoundPhase = 'fight' | 'end';
+
+export interface SimState {
+  frame: number;
+  fighters: [FighterState, FighterState];
+  roundPhase: RoundPhase;
+  roundFrame: number;
+  message: string;
+  messageTimer: number;
+  obstacleState: ObstacleState[]; // parallel to cfg.obstacles
+}

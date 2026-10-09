@@ -1,0 +1,81 @@
+{
+  "katana": {
+    "name": "Cardboard Katana",
+    "bladeLength": 1.0,
+    "shaftLength": 0,
+    "moves": {
+      "high": {
+        "name": "Shomen-giri",
+        "line": "high",
+        "windup": 24,
+        "active": 6,
+        "recovery": 26,
+        "reach": 1.95,
+        "arcDeg": 70,
+        "lunge": 1.6
+      },
+      "mid": {
+        "name": "Tsuki",
+        "line": "mid",
+        "windup": 15,
+        "active": 4,
+        "recovery": 24,
+        "reach": 2.05,
+        "arcDeg": 26,
+        "lunge": 2.2
+      },
+      "low": {
+        "name": "Kiriage",
+        "line": "low",
+        "windup": 19,
+        "active": 6,
+        "recovery": 28,
+        "reach": 1.75,
+        "arcDeg": 80,
+        "lunge": 1.2
+      }
+    },
+    "look": "tube"
+  },
+  "naginata": {
+    "name": "Shop Broom",
+    "bladeLength": 0.55,
+    "shaftLength": 1.5,
+    "moves": {
+      "high": {
+        "name": "Kabuto-wari",
+        "line": "high",
+        "windup": 28,
+        "active": 7,
+        "recovery": 32,
+        "reach": 2.7,
+        "arcDeg": 60,
+        "lunge": 1.2,
+        "minReach": 1.0
+      },
+      "mid": {
+        "name": "Nagi-harai",
+        "line": "mid",
+        "windup": 24,
+        "active": 8,
+        "recovery": 33,
+        "reach": 2.6,
+        "arcDeg": 130,
+        "lunge": 1.0,
+        "minReach": 1.1
+      },
+      "low": {
+        "name": "Ashi-barai",
+        "line": "low",
+        "windup": 21,
+        "active": 6,
+        "recovery": 28,
+        "reach": 2.45,
+        "arcDeg": 90,
+        "lunge": 0.9,
+        "minReach": 0.95
+      }
+    },
+    "look": "broom"
+  }
+}

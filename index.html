@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BUSHIDO BROWSER</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: #060a08; }
+    #app { position: fixed; inset: 0; }
+    #vignette {
+      position: fixed; inset: 0; z-index: 5; pointer-events: none;
+      background: radial-gradient(ellipse at 50% 55%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+    }
+    .hud {
+      position: fixed; z-index: 10; pointer-events: none;
+      font-family: 'Courier New', monospace; color: #cfe8d8;
+      text-shadow: 0 0 6px rgba(63, 160, 106, 0.8);
+    }
+    #p1 { top: 18px; left: 24px; font-size: 18px; }
+    #p2 { top: 18px; right: 24px; font-size: 18px; text-align: right; }
+    .stance { font-size: 13px; color: #7fc9a0; letter-spacing: 2px; }
+    .wound { font-size: 12px; color: #d05050; letter-spacing: 2px; }
+    .weapon { font-size: 12px; color: #8a9a90; letter-spacing: 1px; }
+    #msg {
+      top: 22%; left: 0; right: 0; text-align: center;
+      font-size: 42px; font-weight: bold; letter-spacing: 8px;
+      color: #e8d8b8; text-shadow: 0 0 18px rgba(200, 60, 40, 0.9);
+    }
+    #mode { bottom: 44px; right: 24px; font-size: 12px; color: #6a8a78; }
+    #quote {
+      top: 66%; left: 0; right: 0; text-align: center;
+      font-size: 15px; line-height: 1.7; color: #9fb8a8;
+      transition: opacity 0.8s; opacity: 0;
+    }
+    #quote b { color: #cfe8d8; }
+    #help {
+      bottom: 14px; left: 24px; right: 24px; font-size: 12px;
+      color: #55705f; letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="vignette"></div>
+  <div id="p1" class="hud"></div>
+  <div id="p2" class="hud"></div>
+  <div id="msg" class="hud"></div>
+  <div id="mode" class="hud"></div>
+  <div id="quote" class="hud"></div>
+  <div id="help" class="hud">
+    P1: WASD move &middot; F attack &middot; G dash &middot; SPACE parry &middot; 1/2/3 stance &nbsp;&nbsp;|&nbsp;&nbsp;
+    P2: arrows &middot; . attack &middot; , dash &middot; / parry &middot; 8/9/0 stance &nbsp;&nbsp;|&nbsp;&nbsp;
+    M toggle AI &middot; R reset &nbsp;&nbsp;|&nbsp;&nbsp;
+    match your stance to their cut to deflect &mdash; clean hits kill, glancing hits maim &mdash; there is no steel
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
