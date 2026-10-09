@@ -17,6 +17,11 @@ Each future stage = a location + a dumb argument that went too far.
 - `npm run build` — static bundle to `dist/` (~138 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
+- Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
+  (`.github/workflows/deploy.yml`: typecheck, build, publish `dist/`) →
+  https://gillus.github.io/bushido-browser/. `vite.config.ts` sets
+  `base: './'` so the bundle works under the `/<repo>/` subpath — keep any
+  new asset paths relative.
 
 ## Architecture (load-bearing rules)
 
