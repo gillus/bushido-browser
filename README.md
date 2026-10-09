@@ -12,7 +12,15 @@ forms *extremely* seriously — Jodan, Chudan, ai-uchi — with a wrapping-paper
 tube and a broom. The interface plays it straight because *they* play it
 straight.
 
-## Run
+## Play
+
+**[Play in your browser → gillus.github.io/bushido-browser](https://gillus.github.io/bushido-browser/)**
+
+No install, keyboard only. You start against the AI (it plays Sticchio);
+press **M** to switch to two players on one keyboard. Every push to `main` redeploys it via GitHub
+Actions.
+
+## Run locally
 
 ```
 npm install
