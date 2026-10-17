@@ -95,7 +95,8 @@ Each future stage = a location + a dumb argument that went too far.
   optional `lockLeverage` (tsubazeriai push multiplier, default 1).
   The entire game feel lives here; tune here before touching code.
 - `src/data/characters.json` — proportions (`heightScale`/`bulk` carry the
-  silhouette gag), speeds, colors, `weapon` key, optional `glasses`, and an
+  silhouette gag), speeds, colors, `weapon` key, optional `glasses`, `portrait` (dialogue
+  headshot, see flavor.json below), and an
   optional render-only `shape` block (`belly`/`chest`/`shoulders`/`neck`
   multipliers, `head`: round|long|wide|block, `hair`: topknot|bowl|messy|
   ponytail|bald, `hairColor`, `nose`, `beard`, `eyes`, `tail` = nape tail on
@@ -204,8 +205,14 @@ Each future stage = a location + a dumb argument that went too far.
   vitrine (they land on the felt) and over the floor, teeth stay in the
   frame, the cases lying on top fly. A corpse then rests at the old glass
   height, ~7 cm over the felt — the collider can't sink. `Sfx.glass`.
-- `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown by
-  `main.ts` on round start.
+- `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
+  on round start as PS1-RPG text windows (`dialogue.ts`, styles in
+  `index.html`, 2026-10-17): one speaker at a time, name tab, typewriter
+  text, ▼ when done; P1 talks from the left, P2 answers from the right.
+  The headshot is the character's render-only `portrait` (characters.json,
+  a path relative to the page: `portraits/<key>.png` → put the file in
+  `public/portraits/`); until the file exists it's a placeholder — the
+  initial on the shirt colour. Any image works (cropped square, `cover`).
 - `src/render/poses.ts` — joint Euler targets per stance/move phase.
 - `src/render/parts.ts` — body-part geometry builders (lathe torso, tapered
   limbs, faceted heads, hair caps with a hairline, face features, glasses,

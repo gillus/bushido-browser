@@ -111,7 +111,10 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
 
 - `characters.json` — name, colors, proportions (`heightScale`, `bulk` — this
   is the entire Panzer/Sticchio silhouette gag), `walkSpeed`, `dashSpeed`,
-  `weapon` (a key into `weapons.json`), optional `glasses`, plus render-only
+  `weapon` (a key into `weapons.json`), optional `glasses`, `portrait` (the
+  headshot in the pre-round dialogue box: drop a square image at
+  `public/portraits/panzer.png` / `sticchio.png`; until then it's a
+  placeholder), plus render-only
   `shape` (head/hair/face) and `outfit` (street clothes + the cosplay layer:
   `headband`, `headbandTails`, `obi`, `tasuki`, `kyahan`, `haori`) blocks —
   see `CharacterShape` / `CharacterOutfit` in `src/sim/types.ts`.
@@ -143,7 +146,8 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   into them or a fighter is shoved into them out of a blade lock
   (everything is repaired for the next round).
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
-  pairs). New stage = new argument.
+  pairs), played out in RPG text boxes before each round. New stage = new
+  argument.
 
 Animation poses (joint Euler angles per stance / move phase) live in
 `src/render/poses.ts` — same idea, numbers you can tweak by hand.

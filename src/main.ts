@@ -12,6 +12,7 @@ import { HitboxOverlay } from './render/hitboxDebug';
 import { createScene } from './render/scene';
 import { ragdollWalls } from './render/storefront';
 import { Sfx } from './audio';
+import { Dialogue } from './dialogue';
 import { diffTick, snapshot } from './events';
 import { GamepadInput, PadRead } from './gamepad';
 import { Vector3 } from 'three';
@@ -124,19 +125,14 @@ const hud = {
   p2: document.getElementById('p2')!,
   msg: document.getElementById('msg')!,
   mode: document.getElementById('mode')!,
-  quote: document.getElementById('quote')!,
   lock: document.getElementById('lock')!,
   lockMark: document.querySelector<HTMLElement>('#lock .mark')!,
 };
 
 // pre-fight bickering — the argument that started all this
-let quoteTimer = 0;
+const dialogue = new Dialogue(document.getElementById('dialogue')!, cfg.chars);
 function pickQuote(): void {
-  const q = BICKER[(Math.random() * BICKER.length) | 0];
-  hud.quote.innerHTML =
-    `<b>${cfg.chars[0].name.toUpperCase()}:</b> “${q[0]}”<br>` +
-    `<b>${cfg.chars[1].name.toUpperCase()}:</b> “${q[1]}”`;
-  quoteTimer = 6;
+  dialogue.say(BICKER[(Math.random() * BICKER.length) | 0]);
 }
 pickQuote();
 
@@ -228,8 +224,7 @@ function frame(now: number): void {
     acc -= TICK;
   }
 
-  quoteTimer = Math.max(0, quoteTimer - dt);
-  hud.quote.style.opacity = quoteTimer > 0 ? '1' : '0';
+  dialogue.update(dt);
 
   const liveObstacles = [
     ...obstacles.filter((_, i) => !sim.obstacleState[i].down), ...roomWalls,

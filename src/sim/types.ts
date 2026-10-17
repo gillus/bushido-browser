@@ -33,6 +33,7 @@ export interface CharacterDef {
   dashSpeed: number;
   weapon: string; // key into weapons.json
   glasses?: boolean; // render only: thick spectacles bar on the face
+  portrait?: string; // render only: dialogue headshot, path relative to the page (public/)
   shape?: CharacterShape; // render only: silhouette details
   outfit?: CharacterOutfit; // render only: clothes (default: gi)
 }

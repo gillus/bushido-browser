@@ -40,12 +40,55 @@
       background: #e8d8b8; box-shadow: 0 0 8px rgba(200, 60, 40, 0.9);
     }
     #mode { top: 92px; right: 24px; font-size: 12px; color: #6a8a78; text-align: right; }
-    #quote {
-      top: 66%; left: 0; right: 0; text-align: center;
-      font-size: 15px; line-height: 1.7; color: #9fb8a8;
-      transition: opacity 0.8s; opacity: 0;
+    /* pre-round bickering: PS1-RPG text windows (src/dialogue.ts) */
+    #dialogue {
+      bottom: 92px; left: 50%; transform: translateX(-50%);
+      width: min(780px, calc(100vw - 32px));
+      display: flex; align-items: flex-end; gap: 12px;
+      opacity: 0; transition: opacity 0.5s; text-shadow: none;
     }
-    #quote b { color: #cfe8d8; }
+    #dialogue.on { opacity: 1; }
+    #dialogue.right { flex-direction: row-reverse; }
+    .dlg-portrait, .dlg-window, .dlg-name {
+      border: 2px solid #d8dce8; border-radius: 6px;
+      box-shadow: 0 0 0 2px #1c1e2a, inset 0 0 0 1px #6a7098;
+      background: linear-gradient(180deg, #3149a8 0%, #18226e 55%, #0d1450 100%);
+    }
+    .dlg-portrait {
+      flex: none; width: 112px; height: 112px; overflow: hidden;
+      box-shadow: 0 0 0 2px #1c1e2a, 0 6px 18px rgba(0, 0, 0, 0.6);
+    }
+    .dlg-face, .dlg-face img { width: 100%; height: 100%; display: block; object-fit: cover; }
+    .dlg-face[hidden], .dlg-next[hidden] { display: none; }
+    .dlg-ph {
+      width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+      font: bold 52px 'Courier New', monospace; color: rgba(255, 255, 255, 0.82);
+      text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
+      background: repeating-linear-gradient(135deg, transparent 0 10px, rgba(0, 0, 0, 0.16) 10px 20px), var(--shirt);
+    }
+    .dlg-window {
+      position: relative; flex: 1; min-height: 112px; padding: 24px 22px 18px;
+      box-shadow: 0 0 0 2px #1c1e2a, inset 0 0 0 1px #6a7098, 0 6px 18px rgba(0, 0, 0, 0.6);
+      font-size: 17px; line-height: 1.55; color: #f2f2f6; text-shadow: 2px 2px 0 #080b30;
+    }
+    .dlg-name {
+      position: absolute; top: -15px; left: 16px; padding: 1px 12px;
+      font-size: 14px; font-weight: bold; letter-spacing: 3px;
+      color: #f0d060; text-shadow: 2px 2px 0 #080b30;
+    }
+    #dialogue.right .dlg-name { left: auto; right: 16px; }
+    .dlg-unsaid { visibility: hidden; }
+    .dlg-next {
+      position: absolute; right: 12px; bottom: 6px; font-size: 11px; color: #d8dce8;
+      animation: dlg-blink 0.9s steps(2, start) infinite;
+    }
+    @keyframes dlg-blink { to { visibility: hidden; } }
+    @media (max-height: 640px) {
+      #dialogue { bottom: 96px; width: min(640px, calc(100vw - 32px)); }
+      .dlg-portrait { width: 76px; height: 76px; }
+      .dlg-ph { font-size: 36px; }
+      .dlg-window { min-height: 76px; padding: 18px 16px 12px; font-size: 14px; }
+    }
     #help {
       bottom: 14px; left: 24px; right: 24px; font-size: 12px;
       color: #55705f; letter-spacing: 1px;
@@ -60,7 +103,7 @@
   <div id="msg" class="hud"></div>
   <div id="lock" class="hud"><div class="bar"><div class="mark"></div></div>ATTACK TO PUSH</div>
   <div id="mode" class="hud"></div>
-  <div id="quote" class="hud"></div>
+  <div id="dialogue" class="hud"></div>
   <div id="help" class="hud">
     P1: WASD move &middot; F attack &middot; G dash &middot; SPACE parry &middot; 1/2/3 stance &nbsp;&nbsp;|&nbsp;&nbsp;
     P2: arrows &middot; . attack &middot; , dash &middot; / parry &middot; 8/9/0 stance<br>

@@ -1,6 +1,7 @@
 {
   "panzer": {
     "name": "Panzer",
+    "portrait": "portraits/panzer.png",
     "colors": { "body": "#b03a30", "trim": "#6b6248", "skin": "#e2b49a", "blade": "#b98d5e" },
     "heightScale": 0.86,
     "bulk": 1.45,
@@ -37,6 +38,7 @@
   },
   "sticchio": {
     "name": "Sticchio",
+    "portrait": "portraits/sticchio.png",
     "colors": { "body": "#2456a8", "trim": "#34466a", "skin": "#dcc2a2", "blade": "#c9a23c" },
     "heightScale": 1.14,
     "bulk": 0.62,
