@@ -20,6 +20,7 @@ export interface WeaponDef {
   bladeLength: number;
   shaftLength: number; // 0 = one-handed-ish sword; >0 = polearm
   look?: 'tube' | 'broom'; // improvised-weapon visual override (render only)
+  lockLeverage?: number; // tsubazeriai push multiplier (long haft = lever); default 1
   moves: MoveTable;
 }
 
@@ -51,6 +52,13 @@ export interface CharacterOutfit {
   emblemColor?: string;
   headband?: string;   // hachimaki color; omit for none
   headbandMark?: string; // the rising-sun dot on the forehead
+  headbandTails?: number; // tail length multiplier (1 = short knot ends, 2.5 = BB streamers)
+  // Bushido cosplay worn OVER the street clothes (they take this seriously):
+  obi?: string;        // sash tied over the shirt, knot + swinging tails
+  tasuki?: string;     // sleeve cord crossed in an X over the back
+  kyahan?: string;     // shin wraps (with shorts: over the socks)
+  haori?: string;      // open hip-length coat with wide sleeves
+  haoriCollar?: string; // its collar band, cords and back crest
 }
 
 /**
@@ -68,6 +76,7 @@ export interface CharacterShape {
   nose?: number;       // 0 = none, 1 = normal, 1.6 = honker
   beard?: boolean;
   eyes?: boolean;      // eyes behind the specs (default true; false = none)
+  tail?: boolean;      // loose tail tied at the nape, on any hair style
 }
 
 /**
@@ -173,7 +182,7 @@ export const EMPTY_INPUT: InputFrame = {
 
 export type FighterPhase =
   | 'idle' | 'windup' | 'active' | 'recovery'
-  | 'parry' | 'stagger' | 'flinch' | 'dead';
+  | 'parry' | 'stagger' | 'flinch' | 'lock' | 'dead';
 
 export type WoundRegion = 'arm' | 'leg';
 
@@ -204,4 +213,7 @@ export interface SimState {
   message: string;
   messageTimer: number;
   obstacleState: ObstacleState[]; // parallel to cfg.obstacles
+  /** Tsubazeriai push balance while both fighters are in 'lock':
+   *  +1 = fighter 0 overpowers, -1 = fighter 1 does. 0 otherwise. */
+  lockBalance: number;
 }

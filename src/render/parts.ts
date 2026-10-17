@@ -27,6 +27,24 @@ export function limbGeo(rTop: number, rBot: number, len: number, radial = 8): TH
   return g;
 }
 
+/**
+ * Bare limb with a muscle belly (calf, forearm) instead of a straight taper:
+ * widest `bulgeAt` of the way down, slightly flattened front-to-back.
+ */
+export function muscleGeo(rTop: number, rBulge: number, rBot: number, len: number, bulgeAt = 0.3, radial = 8): THREE.BufferGeometry {
+  const pts = [
+    new THREE.Vector2(0.001, 0),
+    new THREE.Vector2(rTop, 0),
+    new THREE.Vector2(rBulge, -len * bulgeAt),
+    new THREE.Vector2((rBulge + rBot) / 2, -len * (0.5 + bulgeAt / 2)),
+    new THREE.Vector2(rBot, -len),
+    new THREE.Vector2(0.001, -len),
+  ];
+  const g = new THREE.LatheGeometry(pts, radial);
+  g.scale(1, 1, 0.88);
+  return g;
+}
+
 /** Joint ball (elbow / knee / shoulder) — hides the gap when a limb bends. */
 export function ballGeo(r: number): THREE.BufferGeometry {
   return new THREE.SphereGeometry(r, 8, 6);
@@ -54,9 +72,30 @@ export interface TorsoDims {
  * ellipse, not a can. Pivots at the waist (y=0), rises to y=height.
  */
 export function torsoGeo(d: TorsoDims): THREE.BufferGeometry {
+  const g = new THREE.LatheGeometry(torsoProfile(d), 12);
+  g.scale(1, 1, torsoDepth(d));
+  return g;
+}
+
+/** Z squash of the torso's elliptical cross-section. */
+export function torsoDepth(d: TorsoDims): number {
+  return 0.66 + 0.14 * (d.belly - 1);
+}
+
+/** Torso half-width at height y (waist = 0), from the lathe profile. */
+export function torsoRadius(d: TorsoDims, y: number): number {
+  const pts = torsoProfile(d);
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i];
+    if (y <= b.y && b.y > a.y) return a.x + (b.x - a.x) * ((y - a.y) / (b.y - a.y));
+  }
+  return pts[pts.length - 2].x;
+}
+
+function torsoProfile(d: TorsoDims): THREE.Vector2[] {
   const w = 0.19 * d.b; // half-width reference (old box was 0.38*b wide)
   const H = d.height;
-  const pts: THREE.Vector2[] = [
+  return [
     new THREE.Vector2(0.001, 0),
     new THREE.Vector2(w * 0.92, 0),
     new THREE.Vector2(w * (0.95 + 0.18 * (d.belly - 1)), H * 0.12),
@@ -68,9 +107,6 @@ export function torsoGeo(d: TorsoDims): THREE.BufferGeometry {
     new THREE.Vector2(w * 0.45, H),
     new THREE.Vector2(0.001, H),
   ];
-  const g = new THREE.LatheGeometry(pts, 12);
-  g.scale(1, 1, 0.66 + 0.14 * (d.belly - 1));
-  return g;
 }
 
 /** Pelvis: a squat lathe bowl sitting under the torso pivot. */
@@ -113,11 +149,16 @@ export function faceZ(shape: HeadShape, r: number): number {
 /** Head shapes: a faceted sphere scaled per silhouette. Centered at its own middle. */
 export function headGeo(shape: HeadShape, r = 0.115): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(r, 10, 7);
-  // A flatter face plane and tapered jaw avoid the old spherical head.
+  // Flat face plane, a jaw that narrows into a squared chin, and a chin
+  // pushed forward of the face: Bushido Blade's angular PS1 heads.
   const vertices = g.attributes.position;
   for (let i = 0; i < vertices.count; i++) {
-    const y = vertices.getY(i);
-    if (y < -r * 0.25) vertices.setX(i, vertices.getX(i) * 0.84);
+    const y = vertices.getY(i), z = vertices.getZ(i);
+    if (y < -r * 0.25) {
+      const t = Math.min(1, (-y - r * 0.25) / (r * 0.6));
+      vertices.setX(i, vertices.getX(i) * (0.88 - 0.16 * t));
+      if (z > r * 0.2) vertices.setZ(i, z + r * 0.12 * t);
+    }
     if (vertices.getZ(i) > r * 0.72) vertices.setZ(i, r * 0.86);
   }
   g.computeVertexNormals();
@@ -163,7 +204,7 @@ function capGeo(r: number, shape: HeadShape, inflate: number, front: number, bac
 }
 
 /** Build a hair group for a head of radius ~r. Hair sits in head-local space. */
-export function hairGroup(style: NonNullable<CharacterShape['hair']>, color: string, r: number, shape: HeadShape): THREE.Group {
+export function hairGroup(style: NonNullable<CharacterShape['hair']>, color: string, r: number, shape: HeadShape, tail = false): THREE.Group {
   const g = new THREE.Group();
   const { sx, sy, sz } = headScale(shape);
   const top = r * sy;
@@ -203,18 +244,27 @@ export function hairGroup(style: NonNullable<CharacterShape['hair']>, color: str
     }
     case 'ponytail': {
       g.add(mesh(capGeo(r, shape, 1.06, 0.6, -0.3), color));
-      const tail = mesh(limbGeo(0.035, 0.02, r * 2.0, 6), color);
-      tail.position.set(0, top * 0.5, -r * 0.9 * sz);
-      tail.rotation.x = -0.35;
-      g.add(tail);
+      tail = true;
       break;
     }
+  }
+  if (tail) {
+    // a loose tail tied at the nape; swings like the cloth (userData.dangle)
+    const pivot = new THREE.Group();
+    pivot.userData.dangle = 0.35;
+    pivot.position.set(0, -top * 0.15, -r * 0.95 * sz);
+    pivot.rotation.x = 0.25;
+    const lock = mesh(limbGeo(0.03, 0.012, r * 2.1, 6), color);
+    const tie = mesh(limbGeo(0.026, 0.026, 0.016, 6), '#c9a24a');
+    tie.position.y = 0.004;
+    pivot.add(lock, tie);
+    g.add(pivot);
   }
   return g;
 }
 
 /** Hachimaki: a cloth band round the forehead, knotted at the back. */
-export function headbandGroup(color: string, mark: string | undefined, r: number, shape: HeadShape): THREE.Group {
+export function headbandGroup(color: string, mark: string | undefined, r: number, shape: HeadShape, tailLen = 1): THREE.Group {
   const g = new THREE.Group();
   const { sx, sy, sz } = headScale(shape);
   const y = BAND_Y * sy, half = 0.016;
@@ -231,8 +281,8 @@ export function headbandGroup(color: string, mark: string | undefined, r: number
   knot.position.set(0, y, -rMid * sz - 0.008);
   g.add(knot);
   for (const s of [-1, 1]) {
-    const tail = mesh(new THREE.BoxGeometry(0.026, 0.13, 0.006), color);
-    tail.geometry.translate(0, -0.065, 0);
+    // long trailing tails, Bushido Blade style; they swing (see tailStrip)
+    const tail = tailStrip(0.04, 0.13 * tailLen * (s > 0 ? 1 : 0.85), color, 0.8, 0.15);
     tail.position.set(s * 0.008, y, -rMid * sz - 0.012);
     tail.rotation.set(0.3, 0, s * 0.2);
     g.add(tail);
@@ -390,15 +440,22 @@ export function shade(color: string, k: number): THREE.Color {
   return new THREE.Color(color).multiplyScalar(k);
 }
 
-/** Mitten hand with a thumb, hanging at y=0 (the wrist). */
+/**
+ * Gripping fist, hanging at y=0 (the wrist): a squared-off palm block, a
+ * knuckle ridge curled forward and the thumb wrapped over — the blocky
+ * Bushido Blade hand rather than a mitten.
+ */
 export function handGroup(w: number, skin: string, side: 1 | -1): THREE.Group {
   const g = new THREE.Group();
-  const palm = mesh(blobGeo(w * 0.42, w * 0.52, w * 0.34, 7, 5), skin);
+  const palm = mesh(blobGeo(w * 0.4, w * 0.46, w * 0.34, 6, 4), skin);
   palm.position.y = -w * 0.3;
-  const thumb = mesh(blobGeo(w * 0.15, w * 0.26, w * 0.15, 5, 4), skin);
-  thumb.position.set(-side * w * 0.3, -w * 0.18, w * 0.2);
-  thumb.rotation.z = -side * 0.5;
-  g.add(palm, thumb);
+  const fingers = mesh(new THREE.BoxGeometry(w * 0.66, w * 0.3, w * 0.42), shade(skin, 0.94));
+  fingers.position.set(0, -w * 0.62, w * 0.1);
+  fingers.rotation.x = 0.35;
+  const thumb = mesh(blobGeo(w * 0.13, w * 0.24, w * 0.13, 5, 4), skin);
+  thumb.position.set(-side * w * 0.26, -w * 0.38, w * 0.26);
+  thumb.rotation.set(0.6, 0, -side * 0.9);
+  g.add(palm, fingers, thumb);
   return g;
 }
 
@@ -474,7 +531,7 @@ export function emblemMesh(kind: 'star' | 'bolt' | 'dpad' | 'ring', color: strin
 export function teeDetails(d: TorsoDims, shirt: string, emblem?: CharacterOutfitEmblem): THREE.Group {
   const g = new THREE.Group();
   const w = 0.19 * d.b, H = d.height;
-  const zs = 0.66 + 0.14 * (d.belly - 1);
+  const zs = torsoDepth(d);
   const collar = mesh(new THREE.TorusGeometry(w * 0.47, 0.014, 4, 10), shade(shirt, 0.7));
   collar.rotation.x = Math.PI / 2;
   collar.scale.y = 0.85;
@@ -495,3 +552,182 @@ export function teeDetails(d: TorsoDims, shirt: string, emblem?: CharacterOutfit
 }
 
 export interface CharacterOutfitEmblem { kind: 'star' | 'bolt' | 'dpad' | 'ring'; color: string; }
+
+// ---------- bushido cosplay, worn over the street clothes ----------
+
+/** Open band hugging the torso between two heights (obi, tasuki loops). */
+function torsoBand(d: TorsoDims, y0: number, y1: number, puff: number, color: string | THREE.Color): THREE.Mesh {
+  const g = new THREE.CylinderGeometry(torsoRadius(d, y1) * puff, torsoRadius(d, y0) * puff, y1 - y0, 12, 1, true);
+  g.scale(1, 1, torsoDepth(d));
+  const m = mesh(g, color);
+  m.position.y = (y0 + y1) / 2;
+  (m.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+  return m;
+}
+
+/**
+ * A strip of cloth hanging along -Y from its pivot. The pivot is tagged
+ * `userData.dangle` (stiffness 0..1 toward its rest angle), and the view
+ * swings every tagged pivot with gravity and motion.
+ */
+export function tailStrip(w: number, len: number, color: string | THREE.Color, taper = 0.75, stiff = 0.3): THREE.Group {
+  const pivot = new THREE.Group();
+  pivot.userData.dangle = stiff;
+  const g = new THREE.BufferGeometry();
+  const t = w * taper / 2, h = w / 2;
+  // a flat quad that narrows toward the end, with a slight V fold for depth
+  g.setAttribute('position', new THREE.Float32BufferAttribute([
+    -h, 0, 0, 0, 0, 0.006, 0, -len, 0.004, -h, 0, 0, 0, -len, 0.004, -t, -len, 0,
+    0, 0, 0.006, h, 0, 0, t, -len, 0, 0, 0, 0.006, t, -len, 0, 0, -len, 0.004,
+  ], 3));
+  g.computeVertexNormals();
+  const m = mesh(g, color);
+  (m.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+  pivot.add(m);
+  return pivot;
+}
+
+/**
+ * Obi tied over the tee, under the belly where it actually sits on a man
+ * like Panzer: a broad band, a flat knot at the front-left and two tails
+ * (returned separately so the view can let them swing).
+ */
+export function obiGroup(d: TorsoDims, color: string): THREE.Group {
+  const group = new THREE.Group();
+  const y0 = -0.03, y1 = d.height * 0.16;
+  group.add(torsoBand(d, y0, y1, 1.05, color));
+  const ym = (y0 + y1) / 2;
+  const ang = 0.55; // knot sits off-centre, toward the wearer's left
+  const r = torsoRadius(d, ym) * 1.08, zs = torsoDepth(d);
+  const kx = -Math.sin(ang) * r, kz = Math.cos(ang) * r * zs;
+  const knot = mesh(blobGeo(0.05, 0.042, 0.03, 6, 4), shade(color, 0.85));
+  knot.position.set(kx, ym, kz);
+  knot.rotation.y = -ang;
+  group.add(knot);
+  for (const [dx, len, roll] of [[-0.018, 0.3, 0.08], [0.02, 0.24, -0.1]] as const) {
+    const tail = tailStrip(0.07, len, shade(color, 0.92), 0.75, 0.45);
+    tail.position.set(kx + dx, ym - 0.02, kz + 0.012);
+    tail.rotation.set(0, -ang, roll);
+    group.add(tail);
+  }
+  return group;
+}
+
+/**
+ * Tasuki: the cord that ties kimono sleeves back, crossed in an X over the
+ * back and looped over each shoulder. Over a t-shirt it ties back nothing.
+ */
+export function tasukiGroup(d: TorsoDims, color: string): THREE.Group {
+  const g = new THREE.Group();
+  const zs = torsoDepth(d), H = d.height;
+  const surface = (x: number, y: number, sign: number) => {
+    const r = torsoRadius(d, y) * 1.04;
+    const cx = Math.max(-r * 0.97, Math.min(r * 0.97, x));
+    return new THREE.Vector3(cx, y, sign * Math.sqrt(r * r - cx * cx) * zs);
+  };
+  const strand = (pts: THREE.Vector3[]) => {
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const len = a.distanceTo(b);
+      const seg = mesh(new THREE.CylinderGeometry(0.009, 0.009, len + 0.006, 4), color);
+      seg.position.copy(a).add(b).multiplyScalar(0.5);
+      seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      g.add(seg);
+    }
+  };
+  for (const s of [-1, 1]) {
+    const shoulderX = s * torsoRadius(d, H * 0.9) * 0.62;
+    const back: THREE.Vector3[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const t = i / 6;
+      back.push(surface(shoulderX * (1 - t) - s * torsoRadius(d, H * 0.15) * 0.8 * t, H * (0.93 - 0.78 * t), -1));
+    }
+    strand(back);
+    // over the shoulder and down the front into the armpit
+    strand([back[0], new THREE.Vector3(shoulderX, H * 0.99, 0), surface(shoulderX * 1.15, H * 0.72, 1)]);
+  }
+  return g;
+}
+
+/**
+ * Kyahan: cloth shin wraps from below the knee to the ankle, with the
+ * diagonal wrap lines and the tie at the top. Hangs along -Y from y=0.
+ */
+export function kyahanGroup(rTop: number, rBot: number, len: number, color: string): THREE.Group {
+  const g = new THREE.Group();
+  const shell = mesh(limbGeo(rTop, rBot, len, 9), color);
+  g.add(shell);
+  const wraps = 5;
+  for (let i = 1; i < wraps; i++) {
+    const t = i / wraps;
+    const r = rTop + (rBot - rTop) * t;
+    const ring = mesh(new THREE.TorusGeometry(r * 1.01, 0.004, 3, 9), shade(color, 0.72));
+    ring.rotation.set(Math.PI / 2 + 0.3, 0, 0);
+    ring.position.y = -len * t;
+    g.add(ring);
+  }
+  const tie = mesh(new THREE.TorusGeometry(rTop * 1.03, 0.006, 3, 9), '#e8e2d2');
+  tie.rotation.x = Math.PI / 2;
+  tie.position.y = -0.012;
+  g.add(tie);
+  return g;
+}
+
+/**
+ * Haori: a hip-length coat worn open over the tee — a torso shell with the
+ * front cut away, a contrasting collar band down both front edges, the
+ * short cords that tie it, and a crest on the back.
+ */
+export function haoriGroup(d: TorsoDims, color: string, collar: string): THREE.Group {
+  const g = new THREE.Group();
+  const H = d.height, zs = torsoDepth(d);
+  const yHem = -0.16;
+  const prof = [yHem, 0, H * 0.32, H * 0.72, H * 0.9, H * 0.98].map((y) =>
+    new THREE.Vector2(torsoRadius(d, Math.max(0, y)) * (y < H * 0.8 ? 1.12 : 1.08) + (y < 0 ? 0.015 : 0), y));
+  const open = 0.42; // half-angle of the open front
+  const shellGeo = new THREE.LatheGeometry(prof, 12, open, Math.PI * 2 - open * 2);
+  shellGeo.scale(1, 1, zs * 1.06);
+  const shell = mesh(shellGeo, color);
+  (shell.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+  g.add(shell);
+  for (const s of [-1, 1]) {
+    // collar band (eri) running from the back of the neck down the front edge
+    const pts: THREE.Vector3[] = [];
+    for (const v of prof.slice().reverse()) {
+      const r = v.x * 1.005;
+      pts.push(new THREE.Vector3(s * Math.sin(open) * r, v.y, Math.cos(open) * r * zs * 1.06));
+    }
+    pts[0].set(s * 0.05, H * 1.0, -0.01);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const band = mesh(new THREE.BoxGeometry(0.04, a.distanceTo(b) + 0.01, 0.012), collar);
+      band.position.copy(a).add(b).multiplyScalar(0.5);
+      band.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      g.add(band);
+    }
+    const himo = mesh(blobGeo(0.012, 0.03, 0.01, 5, 4), collar);
+    himo.position.set(s * Math.sin(open) * torsoRadius(d, H * 0.55) * 1.0, H * 0.53, Math.cos(open) * torsoRadius(d, H * 0.55) * 1.12 * zs * 1.06 + 0.008);
+    himo.rotation.z = s * 0.5;
+    g.add(himo);
+  }
+  const crest = mesh(new THREE.RingGeometry(0.022, 0.036, 8), collar);
+  crest.position.set(0, H * 0.78, -torsoRadius(d, H * 0.78) * 1.12 * zs * 1.06 - 0.004);
+  crest.rotation.y = Math.PI;
+  g.add(crest);
+  return g;
+}
+
+/** Wide haori sleeve: a flared, open bell from the shoulder past the elbow. */
+export function haoriSleeveGeo(r: number, len: number): THREE.BufferGeometry {
+  const g = new THREE.CylinderGeometry(r, r * 2.1, len, 10, 2, true);
+  g.translate(0, -len / 2, 0);
+  // soft folds, and the bag of the sleeve sagging toward the back of the arm
+  const p = g.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const t = -p.getY(i) / len;
+    const fold = 1 + 0.08 * Math.cos(Math.atan2(p.getX(i), p.getZ(i)) * 5);
+    p.setXYZ(i, p.getX(i) * fold, p.getY(i), p.getZ(i) * fold - t * t * r * 0.9);
+  }
+  g.computeVertexNormals();
+  return g;
+}

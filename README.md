@@ -9,8 +9,9 @@ parties agreed it could only be settled in the way of bushido. Stage one: the
 videogame shop. **Panzer** (short, wide, Nintendo loyalist, cardboard tube)
 vs **Sticchio** (tall, skinny, SEGA apologist, shop broom). They take the
 forms *extremely* seriously — Jodan, Chudan, ai-uchi — with a wrapping-paper
-tube and a broom. The interface plays it straight because *they* play it
-straight.
+tube and a broom, and they dressed for it: hachimaki, obi and shin wraps over
+Panzer's tee, a haori over Sticchio's. The interface plays it straight
+because *they* play it straight.
 
 ## Play
 
@@ -91,8 +92,15 @@ Pads rumble when you're cut, killed, deflected or parried.
   furniture — only bodies collide.) The cardboard standee is the exception:
   touch it and it goes down, and stays down until the next round. Nobody
   ever respects the standee.
-- Simultaneous clean hits are an *ai-uchi*: both fall, nobody scores. They
-  would both insist this proves their point.
+- **Tsubazeriai.** If your cut lands while his is already coming down the
+  *same* line, the weapons meet and lock guard-to-guard. Hammer attack to
+  push; whoever drives the meter to the end throws the other off balance
+  (a short stagger: punish it). Nobody wins in ~2.5 s and you both break
+  apart. A cut arm or a bad knee pushes weaker; the broom's long haft is
+  a lever and pushes harder.
+- Simultaneous clean hits on *different* lines pass each other: an
+  *ai-uchi*. Both fall, nobody scores. They would both insist this proves
+  their point.
 
 ## Editing content (the "text-based editor")
 
@@ -100,13 +108,17 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
 
 - `characters.json` — name, colors, proportions (`heightScale`, `bulk` — this
   is the entire Panzer/Sticchio silhouette gag), `walkSpeed`, `dashSpeed`,
-  `weapon` (a key into `weapons.json`), optional `glasses`.
+  `weapon` (a key into `weapons.json`), optional `glasses`, plus render-only
+  `shape` (head/hair/face) and `outfit` (street clothes + the cosplay layer:
+  `headband`, `headbandTails`, `obi`, `tasuki`, `kyahan`, `haori`) blocks —
+  see `CharacterShape` / `CharacterOutfit` in `src/sim/types.ts`.
 - `weapons.json` — one entry per weapon: visual lengths (`bladeLength`,
   `shaftLength`), optional `look` (`"tube"` / `"broom"` improvised-weapon
   visuals; omit for real blades), plus per-line move frame data: `windup` /
   `active` / `recovery` (in 60ths of a second), `reach` (m), `arcDeg`
   (horizontal arc), `lunge` (forward m/s during the swing), optional
-  `minReach` (polearm dead zone — hits inside it only glance). The whole feel
+  `minReach` (polearm dead zone — hits inside it only glance), optional
+  `lockLeverage` (tsubazeriai push strength, default 1). The whole feel
   of the game lives here.
 - `stage.json` — arena radius, floor grid, fog, plus `props`: a list of
   scenery boxes (`pos` = [x, baseY, z], `size`, `color`, optional `rot` yaw

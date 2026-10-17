@@ -36,6 +36,7 @@ const cfg: SimConfig = {
   obstacles,
   chars: fighterChars,
   moves: [fighterWeapons[0].moves, fighterWeapons[1].moves],
+  lockLeverage: [fighterWeapons[0].lockLeverage ?? 1, fighterWeapons[1].lockLeverage ?? 1],
 };
 
 let sim = createSim(cfg);
@@ -122,6 +123,8 @@ const hud = {
   msg: document.getElementById('msg')!,
   mode: document.getElementById('mode')!,
   quote: document.getElementById('quote')!,
+  lock: document.getElementById('lock')!,
+  lockMark: document.querySelector<HTMLElement>('#lock .mark')!,
 };
 
 // pre-fight bickering — the argument that started all this
@@ -158,6 +161,10 @@ function renderHud(): void {
     ` &nbsp;${'◆'.repeat(b.score)}<br>` +
     `<span class="stance">${STANCE_LABEL[b.stance]}</span>${woundTags(b)}`;
   hud.msg.textContent = sim.messageTimer > 0 ? sim.message : '';
+  // tsubazeriai meter: P1 pushes the mark right, toward P2's side of the HUD
+  const locked = a.phase === 'lock';
+  hud.lock.style.display = locked ? 'block' : 'none';
+  if (locked) hud.lockMark.style.left = `${50 + sim.lockBalance * 50}%`;
   const status = [
     p2IsAI ? `${cfg.chars[1].name}: AI (M for 2P)` : `${cfg.chars[1].name}: HUMAN (M for AI)`,
     pads.count ? `${pads.count} PAD${pads.count > 1 ? 'S' : ''}` : '',

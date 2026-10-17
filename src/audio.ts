@@ -109,6 +109,29 @@ export class Sfx {
         this.tone(out, t + 0.07, 'triangle', 300, 220, 0.14, 0.35);
         break;
       }
+      case 'clash': {
+        // both weapons meet full force: two thocks on top of each other + crumple
+        const out = this.voice((this.pans[0] + this.pans[1]) / 2);
+        this.tone(out, t, 'triangle', 300, 210, 0.22, 0.6);
+        this.tone(out, t, 'triangle', 190, 150, 0.26, 0.5);
+        this.noiseHit(out, t, 0.1, 'bandpass', 1100, 500, 2.5, 0.7);
+        this.noiseHit(out, t + 0.02, 0.18, 'lowpass', 900, 250, 0.7, 0.35);
+        break;
+      }
+      case 'push':
+        // cardboard creaking under load
+        this.noiseHit(this.voice((this.pans[0] + this.pans[1]) / 2), t, 0.07, 'bandpass',
+          650 + Math.random() * 300, 450, 5, 0.14);
+        break;
+      case 'shove': {
+        const out = v(ev.who);
+        this.whoosh(out, t, 0.18, 500, 1300, 0.3);
+        this.tone(out, t, 'triangle', 230, 140, 0.16, 0.45);
+        break;
+      }
+      case 'disengage':
+        this.whoosh(this.voice(0), t, 0.16, 700, 1600, 0.18);
+        break;
       case 'parryTry':
         this.whoosh(v(ev.who), t, 0.08, 1500, 3200, 0.12);
         break;

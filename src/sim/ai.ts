@@ -1,4 +1,4 @@
-import { dist, effWindup, PARRY_WINDOW, SimConfig } from './sim';
+import { CLASH_WINDUP_TAIL, dist, effWindup, PARRY_WINDOW, SimConfig } from './sim';
 import { EMPTY_INPUT, FighterState, InputFrame, Line, LINES, SimState } from './types';
 
 function mulberry32(seed: number): () => number {
@@ -27,6 +27,7 @@ export class AIController {
   private circleTimer = 0;
   private pokeTimer = 90;
   private stanceTimer = 120;
+  private lockRate = -1; // push presses per frame in the current lock; -1 = not locked
 
   /** reaction: mean extra frames of delay. Lower = harder. */
   constructor(seed: number, private reaction = 12) {
@@ -96,6 +97,13 @@ export class AIController {
     const me = sim.fighters[selfIndex];
     const op = sim.fighters[1 - selfIndex];
     const inp: InputFrame = { ...EMPTY_INPUT };
+    if (me.phase === 'lock') {
+      // tsubazeriai: push at a rate picked per lock (~4-9 shoves a second)
+      if (this.lockRate < 0) this.lockRate = 0.07 + this.rng() * 0.08;
+      inp.attack = this.rng() < this.lockRate;
+      return inp;
+    }
+    this.lockRate = -1;
     if (me.phase !== 'idle') return inp; // committed; inputs would be dropped anyway
 
     const d = dist(me, op);
@@ -133,10 +141,18 @@ export class AIController {
             inp.moveY = -1;
             inp.dash = true;
             break;
-          case 'trade':
+          case 'trade': {
+            // If our cut on their line would arrive with theirs, take that
+            // line: the blades meet (tsubazeriai) instead of trading.
+            if (op.phase === 'windup' && op.move) {
+              const lag = effWindup(me, cfg.moves[selfIndex][op.move.line])
+                - (effWindup(op, op.move) - op.phaseFrame);
+              if (Math.abs(lag) <= CLASH_WINDUP_TAIL - 2) inp.stance = op.move.line;
+            }
             if (d < strikeRange) inp.attack = true;
             else inp.moveY = -1;
             break;
+          }
         }
         this.planDone = true;
       } else if (this.plan === 'retreat') {

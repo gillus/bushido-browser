@@ -28,7 +28,11 @@
       "emblem": "star",
       "emblemColor": "#f2d24a",
       "headband": "#ece6da",
-      "headbandMark": "#c0302a"
+      "headbandMark": "#c0302a",
+      "headbandTails": 2.6,
+      "obi": "#2a3150",
+      "tasuki": "#ece6da",
+      "kyahan": "#2c3a5e"
     }
   },
   "sticchio": {
@@ -48,7 +52,8 @@
       "head": "long",
       "hair": "messy",
       "hairColor": "#4a2e1a",
-      "nose": 1.6
+      "nose": 1.6,
+      "tail": true
     },
     "outfit": {
       "style": "street",
@@ -58,7 +63,10 @@
       "emblem": "ring",
       "emblemColor": "#f2d24a",
       "headband": "#ece6da",
-      "headbandMark": "#c0302a"
+      "headbandMark": "#c0302a",
+      "headbandTails": 2.6,
+      "haori": "#2a2a30",
+      "haoriCollar": "#e2dccb"
     }
   }
 }

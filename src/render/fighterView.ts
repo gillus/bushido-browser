@@ -1,16 +1,38 @@
 import * as THREE from 'three';
 import { CharacterDef, FighterState, Obstacle, WeaponDef } from '../sim/types';
 import {
-  JointName, kneelLegs, movePoses, parryPose, Pose, staggerPose, stancePoses,
+  JointName, kneelLegs, lockPose, movePoses, parryPose, Pose, staggerPose, stancePoses,
 } from './poses';
 import { Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
 import {
-  ballGeo, blobGeo, clothGeo, faceGroup, hairGroup, handGroup, headbandGroup,
-  headGeo, headScale, jacketDetails, limbGeo, mat, mesh, pelvisGeo, shade, shoeMesh,
-  sneakerGroup, teeDetails, torsoGeo,
+  ballGeo, blobGeo, clothGeo, faceGroup, haoriGroup, haoriSleeveGeo, hairGroup, handGroup,
+  headbandGroup, headGeo, headScale, jacketDetails, kyahanGroup, limbGeo, mat, mesh,
+  muscleGeo, obiGroup, pelvisGeo, shade, shoeMesh, sneakerGroup, tasukiGroup, teeDetails,
+  torsoGeo,
 } from './parts';
 
 const WOUND_COLOR = new THREE.Color('#7a2020');
+
+// Cloth secondary motion (headband tails, obi ends, ponytail): each tagged
+// pivot's hang direction is a damped spring toward gravity, blended with
+// its rest angle by stiffness, and dragged back by the pivot's own speed.
+const DANGLE_SPRING = 70;
+const DANGLE_DAMP = 9;
+const DANGLE_DRAG = 0.09;    // tilt per m/s of travel
+const DANGLE_MAX_SPEED = 6;  // ignore teleports (round reset)
+const DOWN = new THREE.Vector3(0, -1, 0);
+
+interface Dangler {
+  node: THREE.Object3D;
+  stiff: number;
+  rest: THREE.Quaternion;
+  restDir: THREE.Vector3; // node's hang direction at rest, in parent space
+  dir: THREE.Vector3;     // current hang direction, world space
+  vel: THREE.Vector3;
+  last: THREE.Vector3;
+  phase: number;
+  live: boolean;          // false until seeded from the pose
+}
 
 const JOINTS: JointName[] = [
   'torso', 'head', 'shoulderR', 'elbowR', 'wristR',
@@ -97,6 +119,7 @@ export class FighterView {
   private shownWounds = { arm: false, leg: false };
   private shadow: THREE.Mesh;
   private ragdoll: Ragdoll | null = null;
+  private danglers: Dangler[] = [];
   private dims!: {
     h: number; foreLen: number; shinLen: number;
     tipLen: number; // hand to weapon tip
@@ -162,6 +185,9 @@ export class FighterView {
     if (street) {
       torsoSkin.add(teeDetails(tdims, c.body, outfit.emblem
         ? { kind: outfit.emblem, color: outfit.emblemColor ?? '#ece6da' } : undefined));
+      if (outfit.haori) torsoSkin.add(haoriGroup(tdims, outfit.haori, outfit.haoriCollar ?? '#e8e2d2'));
+      if (outfit.tasuki) torsoSkin.add(tasukiGroup(tdims, outfit.tasuki));
+      if (outfit.obi) torsoSkin.add(obiGroup(tdims, outfit.obi));
     } else {
       torsoSkin.add(jacketDetails(b, torsoH, c.body, c.trim));
     }
@@ -183,9 +209,9 @@ export class FighterView {
       nose: shape.nose ?? 1, beard: !!shape.beard,
       eyes: shape.eyes ?? true, glasses: !!char.glasses,
     }));
-    centre.add(hairGroup(shape.hair ?? 'topknot', hairColor, headR, headShape));
+    centre.add(hairGroup(shape.hair ?? 'topknot', hairColor, headR, headShape, !!shape.tail));
     if (outfit.headband) {
-      centre.add(headbandGroup(outfit.headband, outfit.headbandMark, headR, headShape));
+      centre.add(headbandGroup(outfit.headband, outfit.headbandMark, headR, headShape, outfit.headbandTails));
     }
     this.joints.set('torso', torso);
     this.joints.set('head', head);
@@ -208,7 +234,12 @@ export class FighterView {
         const hem = mesh(limbGeo(armW * 0.82, armW * 0.82, 0.024, 9), shade(c.body, 0.78));
         hem.position.y = -sleeveLen + 0.024;
         shSkin.add(hem);
-        if (!longSleeves) shSkin.add(mesh(limbGeo(armW * 0.42, armW * 0.38, upperLen, 8), c.skin));
+        if (!longSleeves) shSkin.add(mesh(muscleGeo(armW * 0.4, armW * 0.46, armW * 0.36, upperLen, 0.45), c.skin));
+        if (outfit.haori) {
+          const sleeve = mesh(haoriSleeveGeo(armW * 0.85, upperLen * 1.02), outfit.haori);
+          (sleeve.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+          shSkin.add(mesh(ballGeo(armW * 0.7), outfit.haori), sleeve);
+        }
         elSkin.add(mesh(ballGeo(armW * (longSleeves ? 0.5 : 0.4)), longSleeves ? c.body : c.skin));
         if (longSleeves) {
           elSkin.add(mesh(limbGeo(armW * 0.5, armW * 0.44, foreLen * 0.86, 9), c.body));
@@ -216,7 +247,7 @@ export class FighterView {
           cuff.position.y = -foreLen * 0.86 + 0.03;
           elSkin.add(cuff);
         } else {
-          elSkin.add(mesh(limbGeo(armW * 0.38, armW * 0.33, foreLen, 8), c.skin));
+          elSkin.add(mesh(muscleGeo(armW * 0.38, armW * 0.44, armW * 0.3, foreLen, 0.28), c.skin));
         }
         const hand = handGroup(armW, c.skin, side);
         hand.position.y = -foreLen;
@@ -325,7 +356,7 @@ export class FighterView {
           pocket.position.set(side * legW * 0.62, -thighLen * 0.55, 0);
           hipSkin.add(pocket);
           kneeSkin.add(mesh(ballGeo(legW * 0.34), c.skin));
-          kneeSkin.add(mesh(limbGeo(legW * 0.38, legW * 0.28, shinLen, 8), c.skin));
+          kneeSkin.add(mesh(muscleGeo(legW * 0.36, legW * 0.45, legW * 0.27, shinLen, 0.3), c.skin));
           const sock = mesh(limbGeo(legW * 0.33, legW * 0.3, shinLen * 0.38, 8), outfit.socks ?? '#e8e4da');
           sock.position.y = -shinLen * 0.62;
           kneeSkin.add(sock);
@@ -333,6 +364,11 @@ export class FighterView {
             const stripe = mesh(limbGeo(legW * 0.335, legW * 0.335, 0.014, 8), c.body);
             stripe.position.y = -shinLen * 0.65 - i * 0.026;
             kneeSkin.add(stripe);
+          }
+          if (outfit.kyahan) {
+            const wrap = kyahanGroup(legW * 0.44, legW * 0.34, shinLen * 0.64, outfit.kyahan);
+            wrap.position.y = -shinLen * 0.28;
+            kneeSkin.add(wrap);
           }
         } else {
           hipSkin.add(mesh(limbGeo(legW * 0.62, legW * 0.5, thighLen, 9), c.trim));
@@ -374,6 +410,53 @@ export class FighterView {
     };
 
     for (const j of JOINTS) this.current.set(j, new THREE.Euler());
+
+    this.root.traverse((o) => {
+      if (o.userData.dangle === undefined) return;
+      const rest = o.quaternion.clone();
+      this.danglers.push({
+        node: o, stiff: o.userData.dangle, rest,
+        restDir: DOWN.clone().applyQuaternion(rest),
+        dir: new THREE.Vector3(), vel: new THREE.Vector3(), last: new THREE.Vector3(),
+        phase: this.danglers.length * 1.7, live: false,
+      });
+    });
+  }
+
+  private parentQ = new THREE.Quaternion();
+  private tmpV = new THREE.Vector3();
+  private tmpT = new THREE.Vector3();
+
+  /** Swing the cloth pivots (see DANGLE_*). Call after the pose is applied. */
+  private updateDanglers(dt: number): void {
+    if (this.danglers.length === 0 || dt <= 0) return;
+    this.root.updateMatrixWorld(true);
+    for (const d of this.danglers) {
+      d.node.parent!.getWorldQuaternion(this.parentQ);
+      const pos = d.node.getWorldPosition(this.tmpV);
+      const restWorld = this.tmpT.copy(d.restDir).applyQuaternion(this.parentQ);
+      if (!d.live) {
+        d.dir.copy(restWorld);
+        d.vel.set(0, 0, 0);
+        d.last.copy(pos);
+        d.live = true;
+        continue;
+      }
+      const v = pos.clone().sub(d.last).divideScalar(dt);
+      d.last.copy(pos);
+      if (v.length() > DANGLE_MAX_SPEED) v.setLength(DANGLE_MAX_SPEED);
+      const target = DOWN.clone().multiplyScalar(1 - d.stiff).addScaledVector(restWorld, d.stiff)
+        .addScaledVector(v, -DANGLE_DRAG);
+      target.x += Math.sin(this.time * 6.3 + d.phase) * 0.04;
+      target.z += Math.sin(this.time * 4.9 + d.phase * 1.3) * 0.04;
+      target.normalize();
+      d.vel.addScaledVector(target.sub(d.dir), DANGLE_SPRING * dt);
+      d.vel.multiplyScalar(Math.exp(-DANGLE_DAMP * dt));
+      d.dir.addScaledVector(d.vel, dt).normalize();
+      // into parent space, keeping the rest twist around the hang axis
+      const local = d.dir.clone().applyQuaternion(this.parentQ.invert());
+      d.node.quaternion.setFromUnitVectors(d.restDir, local).multiply(d.rest);
+    }
   }
 
   /** Register a limb's materials for the blood tint (skips `noTint` meshes). */
@@ -485,6 +568,7 @@ export class FighterView {
       case 'parry':    return { pose: parryPose, rate: 30 };
       case 'stagger':  return { pose: staggerPose, rate: 14 };
       case 'flinch':   return { pose: staggerPose, rate: 20 };
+      case 'lock':     return { pose: lockPose, rate: 22 };
       default:         return { pose: stancePoses[f.stance], rate: 10 };
     }
   }
@@ -512,6 +596,7 @@ export class FighterView {
       this.ragdoll = null;
       this.body.visible = true;
       this.shadow.position.set(0, 0.004, 0);
+      for (const d of this.danglers) d.live = false; // reseed after the respawn
     }
 
     this.root.position.set(f.pos.x, 0, f.pos.z);
@@ -537,6 +622,14 @@ export class FighterView {
       this.joints.get(j)!.rotation.copy(cur);
     }
 
+    if (f.phase === 'lock') {
+      // straining: a fast tremor through the arms and shoulders
+      const shake = Math.sin(this.time * 31) * 0.035 + Math.sin(this.time * 47) * 0.02;
+      this.joints.get('shoulderR')!.rotation.x += shake;
+      this.joints.get('shoulderL')!.rotation.x += shake;
+      this.joints.get('torso')!.rotation.z += shake * 0.4;
+    }
+
     let targetHipY = kneeling ? this.baseHipY * 0.62 : this.baseHipY;
     if (f.phase === 'idle') {
       // breathing: a slow chest rise so a held guard never looks frozen
@@ -555,6 +648,7 @@ export class FighterView {
     }
     this.hipY += (targetHipY - this.hipY) * Math.min(1, 8 * dt);
     this.hips.position.y = this.hipY;
+    this.updateDanglers(dt);
 
     // blood tint on wounded limbs (idempotent; restores on round reset)
     for (const limb of ['arm', 'leg'] as const) {

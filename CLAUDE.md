@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~141 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~145 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -65,9 +65,25 @@ Each future stage = a location + a dumb argument that went too far.
   `SimState.obstacleState` (NOT in cfg — keeps state serializable for
   lockstep), resets each round; `createSim(cfg)` now takes the config.
   Render topple animation = `updateProps` in `scene.ts`.
-- Combat resolution priority in `sim.ts`: active parry (any line, 8-frame
-  window) → passive stance guard (matching line, idle only) → glancing wound
-  (outer reach/arc: high/mid → arm, low → leg; repeat region = kill) → kill.
+- Combat resolution priority in `sim.ts`: blade clash (below) → active
+  parry (any line, 8-frame window) → passive stance guard (matching line,
+  idle only) → glancing wound (outer reach/arc: high/mid → arm, low → leg;
+  repeat region = kill) → kill.
+- Tsubazeriai / blade lock (2026-10-17, `tryClash`/`updateLock` in
+  `sim.ts`): a landing cut whose opponent's blade is already moving on the
+  SAME line (active, or last `CLASH_WINDUP_TAIL` = 6 windup frames) locks
+  both in phase `'lock'` instead of hitting; cross-line simultaneous hits
+  stay ai-uchi. While locked, `SimState.lockBalance` (±1) moves by
+  `LOCK_PUSH` per attack press × wound multipliers × weapon `lockLeverage`;
+  the pair eases to 0.9 m and drifts toward the losing side. ±1 → loser
+  staggers 36f and slides back (dashVec reused in `stagger`); 150f with no
+  winner → both slide apart. The AI's 'trade' threat plan switches to the
+  attacker's line when its own cut would arrive within the clash window,
+  and pushes at a per-lock random rate. Without broom leverage the lock
+  shifted AI-vs-AI ~3 pts to the katana (it can time a meet against slow
+  broom windups, the broom almost never can) — `lockLeverage: 1.4` on the
+  broom restores it (20-seed × 12-min: baseline 58.5% katana, with locks
+  57.5%, ±1.0 SE). Render: `lockPose` + strain tremor; HUD meter `#lock`.
   Hitboxes are geometric (reach + arc from move data), NOT mesh collision —
   deliberate, keeps the sim render-independent and fair.
 
@@ -75,18 +91,25 @@ Each future stage = a location + a dumb argument that went too far.
 
 - `src/data/weapons.json` — per-weapon visual lengths + frame data
   (windup/active/recovery), reach, arc, lunge, optional `minReach` (polearm
-  dead zone: hits inside it only glance — the naginata/katana reach game).
+  dead zone: hits inside it only glance — the naginata/katana reach game),
+  optional `lockLeverage` (tsubazeriai push multiplier, default 1).
   The entire game feel lives here; tune here before touching code.
 - `src/data/characters.json` — proportions (`heightScale`/`bulk` carry the
   silhouette gag), speeds, colors, `weapon` key, optional `glasses`, and an
   optional render-only `shape` block (`belly`/`chest`/`shoulders`/`neck`
   multipliers, `head`: round|long|wide|block, `hair`: topknot|bowl|messy|
-  ponytail|bald, `hairColor`, `nose`, `beard`, `eyes`) — see `CharacterShape`
+  ponytail|bald, `hairColor`, `nose`, `beard`, `eyes`, `tail` = nape tail on
+  any hair) — see `CharacterShape`
   in `types.ts` — and an optional render-only `outfit` block (`style`:
   street|gi, `sleeves`, `legs`: shorts|jeans, `shoes`, `socks`, `emblem`:
-  star|bolt|dpad|ring, `emblemColor`, `headband` + `headbandMark` for the
-  hachimaki) — see `CharacterOutfit`. With `style: "street"`, `colors.body`
-  is the shirt and `colors.trim` the trousers; no `outfit` = the old gi.
+  star|bolt|dpad|ring, `emblemColor`, `headband` + `headbandMark` +
+  `headbandTails` for the hachimaki) — see `CharacterOutfit`. With `style:
+  "street"`, `colors.body` is the shirt and `colors.trim` the trousers; no
+  `outfit` = the old gi. **Cosplay layer (2026-10-17, user decision):**
+  Bushido Blade kit worn OVER the street clothes — `obi` (sash + tails),
+  `tasuki` (X cord on the back), `kyahan` (shin wraps, shorts only),
+  `haori` + `haoriCollar` (open coat, bell sleeves, back crest). Each is a
+  colour string; omit to leave it off.
   Render-only fields never touch the sim; speeds/frame-data DO — keep stats
   fixed when reskinning or the 50/50 balance breaks.
 - `src/data/stage.json` — arena radius, grid, fog, `floorColor` (+ optional
@@ -110,8 +133,13 @@ Each future stage = a location + a dumb argument that went too far.
 - `src/render/poses.ts` — joint Euler targets per stance/move phase.
 - `src/render/parts.ts` — body-part geometry builders (lathe torso, tapered
   limbs, faceted heads, hair caps with a hairline, face features, glasses,
-  hachimaki, street clothes: tee/emblem, hands, sneakers). Face layout
-  constants `EYE_Y`/`BAND_Y` live there. Flat-shaded, 8–12 radial segments:
+  hachimaki, street clothes: tee/emblem, hands, sneakers, cosplay layer:
+  obi/tasuki/kyahan/haori). Face layout
+  constants `EYE_Y`/`BAND_Y` live there. Hanging cloth/hair (hachimaki
+  tails, obi tails, ponytail) is built with `tailStrip` or a pivot tagged
+  `userData.dangle = stiffness`; `FighterView.updateDanglers` springs every
+  tagged pivot toward gravity and drags it with the body's motion —
+  render-only secondary motion, frozen in place on the ragdoll clone. Flat-shaded, 8–12 radial segments:
   "smooth but still PS1". Joint layout is the original box-man's, so poses
   are unaffected. Mesh geometry is NEVER a hitbox — press **H** in-game
   for `HitboxOverlay` (`hitboxDebug.ts`), which draws what the sim really
@@ -138,6 +166,10 @@ Balance claims need 10+ sim-minutes — 3-minute runs are seed-noisy.
 
 ## Known tuning debts (pending user playtest)
 
+- AI-vs-AI baseline drifted to ~56–58% katana since the walled room
+  (2026-10-17 20-seed runs) — the 54/46 figure below predates the walls.
+- Lock push is attack-mashing vs an AI pushing 4–9×/s (`lockRate` in
+  `ai.ts`); humans may mash faster — check in playtest.
 - Mid thrust (Tsuki) is fastest AND longest reach — likely dominant.
 - Arm wounds vastly outnumber leg wounds (2 of 3 lines map to arm).
 - Katana vs naginata was AI-balanced to ~50/50 on 2026-08-19 (two 12-min

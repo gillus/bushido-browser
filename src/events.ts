@@ -11,6 +11,10 @@ export type GameEvent =
   | { type: 'deflect'; who: number }              // `who` (attacker) bounced off a stance guard
   | { type: 'parried'; who: number }              // `who` (attacker) got actively parried
   | { type: 'parryTry'; who: number }
+  | { type: 'clash' }                             // blades met: tsubazeriai
+  | { type: 'push'; who: number }                 // `who` shoved the lock their way
+  | { type: 'shove'; who: number }                // `who` lost the lock and staggers
+  | { type: 'disengage' }
   | { type: 'wound'; who: number; region: WoundRegion }
   | { type: 'kill'; who: number; mutual: boolean } // `who` died
   | { type: 'dash'; who: number }
@@ -21,6 +25,7 @@ export type GameEvent =
 export interface TickSnapshot {
   frame: number;
   roundPhase: RoundPhase;
+  lockBalance: number;
   fighters: {
     phase: FighterPhase; stance: Line; dashLeft: number; step: number;
     wounds: Record<WoundRegion, boolean>;
@@ -39,6 +44,7 @@ export function snapshot(sim: SimState): TickSnapshot {
   return {
     frame: sim.frame,
     roundPhase: sim.roundPhase,
+    lockBalance: sim.lockBalance,
     fighters: sim.fighters.map((f) => ({
       phase: f.phase, stance: f.stance, dashLeft: f.dashLeft,
       step: stepIndex(f.walkCycle), wounds: { ...f.wounds },
@@ -56,6 +62,17 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
     return out;
   }
 
+  const wasLocked = before.fighters[0].phase === 'lock';
+  const locked = sim.fighters[0].phase === 'lock';
+  if (!wasLocked && locked) out.push({ type: 'clash' });
+  if (wasLocked && locked && sim.lockBalance !== before.lockBalance) {
+    out.push({ type: 'push', who: sim.lockBalance > before.lockBalance ? 0 : 1 });
+  }
+  if (wasLocked && !locked) {
+    const loser = sim.fighters.findIndex((f) => f.phase === 'stagger');
+    out.push(loser >= 0 ? { type: 'shove', who: loser } : { type: 'disengage' });
+  }
+
   const bothDead = sim.fighters.every((f) => f.phase === 'dead');
   for (let i = 0; i < 2; i++) {
     const b = before.fighters[i];
@@ -63,7 +80,7 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
     const o = before.fighters[1 - i];
     if (f.phase !== b.phase) {
       if (b.phase === 'windup' && f.phase === 'active') out.push({ type: 'swing', who: i });
-      else if (f.phase === 'stagger') {
+      else if (f.phase === 'stagger' && b.phase !== 'lock') {
         out.push({ type: o.phase === 'parry' ? 'parried' : 'deflect', who: i });
       } else if (f.phase === 'parry') out.push({ type: 'parryTry', who: i });
       else if (f.phase === 'flinch') {

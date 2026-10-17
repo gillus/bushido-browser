@@ -76,6 +76,7 @@
         "minReach": 0.95
       }
     },
-    "look": "broom"
+    "look": "broom",
+    "lockLeverage": 1.4
   }
 }

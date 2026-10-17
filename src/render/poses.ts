@@ -129,6 +129,15 @@ export const parryPose: Pose = {
   hipL: [0.16, 0, -0.05], kneeL: [0.4, 0, 0],
 };
 
+// Tsubazeriai: guard-to-guard, hands pulled in to the chest, weapon raised
+// so the two cross above the gap, leaning into the push
+export const lockPose: Pose = {
+  torso: [0.3, 0, 0], head: [-0.2, 0, 0],
+  shoulderR: [-1.6, -0.2, -0.3], elbowR: [-0.95, 0, 0], wristR: [-0.25, 0, 0],
+  shoulderL: [-1.4, 0.25, 0.35], elbowL: [-1.1, 0, 0],
+  ...lungeLegs,
+};
+
 // Blade knocked wide, weight thrown onto the back foot
 export const staggerPose: Pose = {
   torso: [-0.35, 0, 0.12], head: [-0.25, 0, 0],

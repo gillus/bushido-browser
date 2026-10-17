@@ -116,6 +116,9 @@ export class GamepadInput {
         this.buzz(1 - ev.who, 0.2, 0.5, 150); // the killer feels it land
         break;
       case 'wound': this.buzz(ev.who, 0.7, 0.5, 200); break;
+      case 'clash': this.buzz(0, 0.5, 0.6, 180); this.buzz(1, 0.5, 0.6, 180); break;
+      case 'push': this.buzz(1 - ev.who, 0, 0.35, 45); break; // feel them lean on you
+      case 'shove': this.buzz(ev.who, 0.6, 0.4, 220); break;
       case 'parried': this.buzz(ev.who, 0.4, 0.8, 160); break;
       case 'deflect': this.buzz(ev.who, 0.2, 0.6, 110); break;
     }

@@ -28,12 +28,28 @@ const DASH_FRAMES = 10;
 const DASH_COOLDOWN = 28;
 const LUNGE_WINDUP_TAIL = 6; // lunge kicks in this many frames before active
 
+// Tsubazeriai: a same-line cut that lands while the other blade is already
+// moving (active, or in its lunge tail) meets steel — well, cardboard —
+// instead of flesh. Both lock guard-to-guard and push: each attack press
+// shoves the balance; whoever reaches the end throws the other off
+// balance. Cross-line simultaneous cuts still pass each other (ai-uchi).
+export const CLASH_WINDUP_TAIL = LUNGE_WINDUP_TAIL;
+const LOCK_FRAMES = 150;        // nobody wins by then: both break apart
+const LOCK_DIST = 0.9;            // guard-to-guard spacing while locked
+const LOCK_CLOSE_RATE = 0.2;      // per-frame ease toward LOCK_DIST
+const LOCK_PUSH = 0.12;           // balance per attack press
+const LOCK_DRIFT = 0.012;         // m/frame the pair slides at full balance
+const LOCK_ARM_MULT = 0.8;        // a cut arm pushes weaker
+const LOCK_LEG_MULT = 0.85;       // so does a kneeling stance
+const SHOVE_STAGGER_FRAMES = 36;  // shorter than a deflect: a real but not free opening
+
 export interface SimConfig {
   arenaRadius: number;
   arenaHalf?: number;    // square arena half-extent (room walls); overrides arenaRadius
   obstacles: Obstacle[]; // solid furniture, derived from stage props
   chars: [CharacterDef, CharacterDef];
   moves: [MoveTable, MoveTable]; // per fighter, from their weapon
+  lockLeverage?: [number, number]; // per fighter, from their weapon (default 1)
 }
 
 function makeFighter(index: number): FighterState {
@@ -68,6 +84,7 @@ export function createSim(cfg: SimConfig): SimState {
     message: 'FIGHT',
     messageTimer: 70,
     obstacleState: freshObstacleState(cfg),
+    lockBalance: 0,
   };
 }
 
@@ -82,6 +99,7 @@ function resetRound(sim: SimState, cfg: SimConfig): void {
   sim.message = 'FIGHT';
   sim.messageTimer = 70;
   sim.obstacleState = freshObstacleState(cfg); // the standee rises again
+  sim.lockBalance = 0;
 }
 
 function angleWrap(a: number): number {
@@ -192,6 +210,12 @@ function updateFighter(
     }
 
     case 'stagger': {
+      // a shove out of a lock slides the loser back
+      if (f.dashLeft > 0) {
+        f.pos.x += f.dashVec.x * char.dashSpeed * TICK;
+        f.pos.z += f.dashVec.z * char.dashSpeed * TICK;
+        f.dashLeft--;
+      }
       if (++f.phaseFrame >= f.staggerLen) { f.phase = 'idle'; f.phaseFrame = 0; }
       break;
     }
@@ -263,6 +287,101 @@ export function effWindup(f: FighterState, m: MoveDef): number {
   return f.wounds.arm ? Math.round(m.windup * ARM_WINDUP_MULT) : m.windup;
 }
 
+/** Keep bodies from overlapping. */
+function separate(a: FighterState, b: FighterState, cfg: SimConfig, sim: SimState): void {
+  const d = dist(a, b);
+  const minD = BODY_RADIUS * 2;
+  if (d <= 0.001 || d >= minD) return;
+  const push = (minD - d) / 2;
+  const nx = (b.pos.x - a.pos.x) / d;
+  const nz = (b.pos.z - a.pos.z) / d;
+  a.pos.x -= nx * push; a.pos.z -= nz * push;
+  b.pos.x += nx * push; b.pos.z += nz * push;
+  collide(a, cfg, sim);
+  collide(b, cfg, sim);
+}
+
+/** Is this fighter's blade already travelling (can it meet another)? */
+function bladeMoving(f: FighterState): boolean {
+  if (f.phase === 'active') return !f.didHit;
+  return f.phase === 'windup' && effWindup(f, f.move!) - f.phaseFrame <= CLASH_WINDUP_TAIL;
+}
+
+/** Blades on the same line meet: lock both fighters guard-to-guard. */
+function tryClash(sim: SimState): boolean {
+  for (let i = 0; i < 2; i++) {
+    const f = sim.fighters[i];
+    const o = sim.fighters[1 - i];
+    if (f.phase !== 'active' || f.didHit || !bladeMoving(o)) continue;
+    if (o.move!.line !== f.move!.line || !testHit(f, o).hit) continue;
+    for (const g of sim.fighters) {
+      g.phase = 'lock';
+      g.phaseFrame = 0;
+      g.move = null;
+      g.didHit = false;
+      g.dashLeft = 0;
+    }
+    sim.lockBalance = 0;
+    sim.message = 'TSUBAZERIAI';
+    sim.messageTimer = 70;
+    return true;
+  }
+  return false;
+}
+
+function lockStrength(f: FighterState, leverage = 1): number {
+  return leverage * (f.wounds.arm ? LOCK_ARM_MULT : 1) * (f.wounds.leg ? LOCK_LEG_MULT : 1);
+}
+
+/** Push contest while locked. Attack presses push; nothing else does. */
+function updateLock(sim: SimState, cfg: SimConfig, inputs: [InputFrame, InputFrame]): void {
+  const [a, b] = sim.fighters;
+  if (inputs[0].attack) sim.lockBalance += LOCK_PUSH * lockStrength(a, cfg.lockLeverage?.[0]);
+  if (inputs[1].attack) sim.lockBalance -= LOCK_PUSH * lockStrength(b, cfg.lockLeverage?.[1]);
+  sim.lockBalance = Math.max(-1, Math.min(1, sim.lockBalance));
+
+  // close to guard-to-guard, and let the stronger side walk the pair back
+  const d = dist(a, b) || 1e-3;
+  const nx = (b.pos.x - a.pos.x) / d, nz = (b.pos.z - a.pos.z) / d;
+  const drift = sim.lockBalance * LOCK_DRIFT;
+  const mx = (a.pos.x + b.pos.x) / 2 + nx * drift;
+  const mz = (a.pos.z + b.pos.z) / 2 + nz * drift;
+  const half = (d + (LOCK_DIST - d) * LOCK_CLOSE_RATE) / 2;
+  a.pos.x = mx - nx * half; a.pos.z = mz - nz * half;
+  b.pos.x = mx + nx * half; b.pos.z = mz + nz * half;
+  for (const f of sim.fighters) {
+    f.facing = Math.atan2((f === a ? b : a).pos.x - f.pos.x, (f === a ? b : a).pos.z - f.pos.z);
+    f.phaseFrame++;
+    collide(f, cfg, sim);
+  }
+  separate(a, b, cfg, sim); // one pinned to a wall: the pusher must not walk through
+
+  const away = (f: FighterState, sign: number) => {
+    f.dashVec = { x: -nx * sign, z: -nz * sign };
+    f.dashLeft = DASH_FRAMES;
+  };
+  if (Math.abs(sim.lockBalance) >= 1) {
+    const w = sim.lockBalance > 0 ? 0 : 1;
+    const winner = sim.fighters[w], loser = sim.fighters[1 - w];
+    winner.phase = 'idle';
+    winner.phaseFrame = 0;
+    loser.phase = 'stagger';
+    loser.phaseFrame = 0;
+    loser.staggerLen = SHOVE_STAGGER_FRAMES;
+    away(loser, w === 0 ? -1 : 1);
+    sim.lockBalance = 0;
+    sim.message = 'OVERPOWERED';
+    sim.messageTimer = 50;
+  } else if (a.phaseFrame >= LOCK_FRAMES) {
+    for (const f of sim.fighters) { f.phase = 'idle'; f.phaseFrame = 0; }
+    away(a, 1);
+    away(b, -1);
+    sim.lockBalance = 0;
+    sim.message = 'DISENGAGE';
+    sim.messageTimer = 45;
+  }
+}
+
 interface HitTest { hit: boolean; glancing: boolean; }
 
 /** Does attacker `f` reach opponent `o` this frame, and how cleanly? */
@@ -293,21 +412,13 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
   }
 
   const [a, b] = sim.fighters;
+  if (a.phase === 'lock') { updateLock(sim, cfg, inputs); return; } // both lock together
   updateFighter(a, b, cfg.chars[0], cfg.moves[0], cfg, sim, inputs[0]);
   updateFighter(b, a, cfg.chars[1], cfg.moves[1], cfg, sim, inputs[1]);
 
-  // Keep bodies from overlapping
-  const d = dist(a, b);
-  const minD = BODY_RADIUS * 2;
-  if (d > 0.001 && d < minD && a.phase !== 'dead' && b.phase !== 'dead') {
-    const push = (minD - d) / 2;
-    const nx = (b.pos.x - a.pos.x) / d;
-    const nz = (b.pos.z - a.pos.z) / d;
-    a.pos.x -= nx * push; a.pos.z -= nz * push;
-    b.pos.x += nx * push; b.pos.z += nz * push;
-    collide(a, cfg, sim);
-    collide(b, cfg, sim);
-  }
+  if (a.phase !== 'dead' && b.phase !== 'dead') separate(a, b, cfg, sim);
+
+  if (tryClash(sim)) return;
 
   // Resolve blades. Collect first so a mutual hit is a true double kill.
   const kills: [boolean, boolean] = [false, false];
