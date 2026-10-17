@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { SimState } from '../sim/types';
+import { BODY_RADIUS } from '../sim/sim';
+import { Obstacle, SimState } from '../sim/types';
 import { Breakable } from './ragdoll';
 
 const GRAVITY = 9.8;
@@ -100,4 +101,25 @@ export interface Smash {
 export interface Smashable {
   readonly breakables: Breakable[];
   update(sim: SimState, dt: number): Smash[];
+}
+
+/**
+ * A fighter OVERPOWERED out of a blade lock (the only stagger that carries
+ * a dash) sliding into `ob`: where they are (floor level) and the blow as a
+ * velocity of `speed` along their slide. Null if nobody is.
+ */
+export function shoved(sim: SimState, ob: Obstacle, speed: number): { at: THREE.Vector3; vel: THREE.Vector3 } | null {
+  for (const f of sim.fighters) {
+    if (f.phase !== 'stagger' || f.dashLeft <= 0) continue;
+    const dx = f.pos.x - ob.x, dz = f.pos.z - ob.z;
+    if (f.dashVec.x * dx + f.dashVec.z * dz >= 0) continue; // sliding away from it
+    const lx = dx * ob.c - dz * ob.s, lz = dx * ob.s + dz * ob.c;
+    const gap = Math.hypot(Math.max(0, Math.abs(lx) - ob.halfW), Math.max(0, Math.abs(lz) - ob.halfD));
+    if (gap > BODY_RADIUS + 0.08) continue;
+    return {
+      at: new THREE.Vector3(f.pos.x, 0, f.pos.z),
+      vel: new THREE.Vector3(f.dashVec.x, 0, f.dashVec.z).multiplyScalar(speed),
+    };
+  }
+  return null;
 }

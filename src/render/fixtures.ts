@@ -17,7 +17,7 @@ export function buildShelf(p: StageProp): THREE.Object3D {
 }
 
 /** mulberry32: deterministic set dressing (render-only, not the sim's RNG). */
-function rng(seed: number): () => number {
+export function rng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) | 0;

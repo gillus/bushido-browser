@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~159 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~161 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -128,8 +128,9 @@ Each future stage = a location + a dumb argument that went too far.
   them off the spawn corridor x≈0, z∈[-3,3]); `knockable: true` on a solid
   prop makes it cardboard — topples on touch, back up next round; non-solid
   props are pure set dressing.
-  **Fixtures (2026-10-17, `fixtures.ts`, `kiosk.ts`, `arcade.ts`):** a prop with
-  `"fixture": "shelf" | "kiosk" | "arcade"` keeps its box as the collider but renders as shop
+  **Fixtures (2026-10-17, `fixtures.ts`, `kiosk.ts`, `arcade.ts`,
+  `displayTable.ts`):** a prop with `"fixture": "shelf" | "kiosk" | "arcade" |
+  "table"` keeps its box as the collider but renders as shop
   furniture built inside it — front = local +z, so a +z-wall shelf has
   `rot: 180`, -x wall `90`, +x wall `-90`. Shelves take `label` (lit
   header sign), `accent` (sign colour) and `stock`: `games` (jewel/keep
@@ -140,10 +141,12 @@ Each future stage = a location + a dumb argument that went too far.
   per shelf. The kiosk is a demo unit (tethered pad, CRT running a canvas
   attract-mode loop at 12 fps); the arcade is an upright cabinet (coin
   door, two-player panel, tilted monitor running a shooter's attract loop,
-  `label` on the lit marquee). Both are breakable — see below. The arcade
-  replaced a non-solid stack of CRTs on the same solid footprint: the sim
-  sees identical obstacles (only the ragdoll-only `y1` grew), so AI balance
-  is untouched. Solid props
+  `label` on the lit marquee); the table is a glass-topped vitrine (games
+  and a console on felt, a few cases lying on the glass). All three are
+  breakable — see below. The arcade and the table replaced plain props on
+  the same solid footprints (the arcade a stack of CRTs, the table a slab
+  with boxes on it): the sim sees identical obstacles (only the
+  ragdoll-only `y1` of the arcade grew), so AI balance is untouched. Solid props
   ≥ 1.5 m tall flush to a wall hide once the camera is within 0.3 m of
   their front (`wallDecor` limits in `scene.ts`), so wall shelving never
   blocks the shot from behind. AI-vs-AI is unchanged by the wall shelving
@@ -171,7 +174,8 @@ Each future stage = a location + a dumb argument that went too far.
   test `Breakable`s BEFORE the obstacles — an obstacle pushout would eat
   the impact speed. The two triggers are the same everywhere: a corpse
   particle at ≥ `breakSpeed`, or a fighter OVERPOWERED out of a blade lock
-  (`stagger` with `dashLeft > 0`) sliding into it.
+  (`stagger` with `dashLeft > 0`) sliding into it (`shoved()` in
+  `debris.ts`, for any breakable box; the window checks its own panes).
   *Window* (`shopWindow.ts`): each pane between
   mullions is a `Breakable` (`ragdoll.ts`): a slab just outside the glass. A particle hitting
   it at ≥ `BREAK_SPEED` (1.5 m/s) shatters the pane and loses `BREAK_DRAG`
@@ -194,6 +198,12 @@ Each future stage = a location + a dumb argument that went too far.
   rocks along the blow. It deliberately never topples: the sim collider
   stays upright, so a toppled render would leave fighters bumping into
   air and corpses leaning on nothing. `Sfx.crt` / `Sfx.spark`.
+  *Display table* (`displayTable.ts`, `BREAK_SPEED` 1.8 m/s — any
+  direction counts, so a corpse slumping onto the glass breaks it too):
+  a `solid` Breakable; the glass top shatters, shards rain into the
+  vitrine (they land on the felt) and over the floor, teeth stay in the
+  frame, the cases lying on top fly. A corpse then rests at the old glass
+  height, ~7 cm over the felt — the collider can't sink. `Sfx.glass`.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown by
   `main.ts` on round start.
 - `src/render/poses.ts` — joint Euler targets per stance/move phase.

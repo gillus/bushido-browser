@@ -1,7 +1,6 @@
 import * as THREE from 'three';
-import { BODY_RADIUS } from '../sim/sim';
 import { Obstacle, SimState, StageProp } from '../sim/types';
-import { Debris, RoundWatch, Smash, Smashable, shardGeo, shardMat } from './debris';
+import { Debris, RoundWatch, Smash, Smashable, shardGeo, shardMat, shoved } from './debris';
 import { Breakable } from './ragdoll';
 
 const BREAK_SPEED = 2.0;  // m/s a corpse must hit it at — sturdier than the window
@@ -84,19 +83,8 @@ export abstract class CrtCabinet implements Smashable {
     if (this.round.newRound(sim)) this.reset();
     this.screen.update(dt);
 
-    if (!this.unit.broken) {
-      for (const f of sim.fighters) {
-        // the OVERPOWERED slide is the only stagger that carries a dash
-        if (f.phase !== 'stagger' || f.dashLeft <= 0) continue;
-        const ob = this.ob, dx = f.pos.x - ob.x, dz = f.pos.z - ob.z;
-        if (f.dashVec.x * dx + f.dashVec.z * dz >= 0) continue; // sliding away from it
-        const lx = dx * ob.c - dz * ob.s, lz = dx * ob.s + dz * ob.c;
-        const gap = Math.hypot(Math.max(0, Math.abs(lx) - ob.halfW), Math.max(0, Math.abs(lz) - ob.halfD));
-        if (gap > BODY_RADIUS + 0.08) continue;
-        this.smash(new THREE.Vector3(f.dashVec.x, 0, f.dashVec.z).multiplyScalar(SHOVE_SPEED));
-        break;
-      }
-    }
+    const shove = this.unit.broken ? null : shoved(sim, this.ob, SHOVE_SPEED);
+    if (shove) this.smash(shove.vel);
 
     this.debris.update(dt);
     if (this.rockAmp > 0) {

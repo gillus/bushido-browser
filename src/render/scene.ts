@@ -4,6 +4,7 @@ import { Clerk } from './clerk';
 import { Smashable } from './debris';
 import { buildShelf } from './fixtures';
 import { Arcade } from './arcade';
+import { DisplayTable } from './displayTable';
 import { Kiosk } from './kiosk';
 import { buildStorefront, holedWallGeo, storefrontHoles, wallAngle } from './storefront';
 
@@ -13,7 +14,7 @@ export interface SceneBundle {
   renderer: THREE.WebGLRenderer;
   updateCamera: (a: FighterState, b: FighterState, dt: number) => void;
   updateProps: (sim: SimState) => void;
-  smashables: Smashable[]; // set dressing that breaks: the shop window, demo kiosks
+  smashables: Smashable[]; // set dressing that breaks: shop window, kiosk, arcade, display table
 }
 
 function ringLine(radius: number, y: number, color: string): THREE.LineLoop {
@@ -189,9 +190,12 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(p.size[0], p.size[1], p.size[2]));
     mesh.position.set(p.pos[0], p.pos[1] + p.size[1] / 2, p.pos[2]);
     if (p.rot) mesh.rotation.y = (p.rot * Math.PI) / 180;
-    const cabinet = p.fixture === 'kiosk' ? new Kiosk(p) : p.fixture === 'arcade' ? new Arcade(p) : null;
-    if (cabinet) smashables.push(cabinet);
-    const fixture = cabinet?.object ?? (p.fixture === 'shelf' ? buildShelf(p) : null);
+    const smashable = p.fixture === 'kiosk' ? new Kiosk(p)
+      : p.fixture === 'arcade' ? new Arcade(p)
+      : p.fixture === 'table' ? new DisplayTable(p)
+      : null;
+    if (smashable) smashables.push(smashable);
+    const fixture = smashable?.object ?? (p.fixture === 'shelf' ? buildShelf(p) : null);
     if (fixture) {
       scene.add(fixture);
     } else {
