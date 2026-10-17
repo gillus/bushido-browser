@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~150 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~155 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -128,6 +128,22 @@ Each future stage = a location + a dumb argument that went too far.
   them off the spawn corridor x≈0, z∈[-3,3]); `knockable: true` on a solid
   prop makes it cardboard — topples on touch, back up next round; non-solid
   props are pure set dressing.
+  **Fixtures (2026-10-17, `fixtures.ts`):** a prop with `"fixture":
+  "shelf" | "kiosk"` keeps its box as the collider but renders as shop
+  furniture built inside it — front = local +z, so a +z-wall shelf has
+  `rot: 180`, -x wall `90`, +x wall `-90`. Shelves take `label` (lit
+  header sign), `accent` (sign colour) and `stock`: `games` (jewel/keep
+  cases spines-out, face-outs, a fallen leaner), `bigbox` (PC boxes) or
+  `pegs` (pegboard blister packs over console boxes). Stock is seeded from
+  the prop's position (same shelves every load); all boxes of one fixture
+  merge into a single vertex-coloured mesh (`BoxBatch`) — one draw call
+  per shelf. The kiosk is a demo unit (tethered pad, CRT running a canvas
+  attract-mode loop at 12 fps, ticked from `updateCamera`). Solid props
+  ≥ 1.5 m tall flush to a wall hide once the camera is within 0.3 m of
+  their front (`wallDecor` limits in `scene.ts`), so wall shelving never
+  blocks the shot from behind. AI-vs-AI is unchanged by the wall shelving
+  (identical 20-seed × 12-min results, 58.6% katana): the AI roams only
+  |x| < 4.5, z ∈ [-3, 5.8], so it never reaches them — humans will.
   **Storefront (2026-10-17):** `walls.storefront` cuts a display window +
   glass door into one wall (`holedWallGeo`) and `storefront.ts` builds the
   frames, mirrored vinyl lettering, a ledge of games, and the night street
@@ -142,6 +158,19 @@ Each future stage = a location + a dumb argument that went too far.
   ~8 s via `updateCamera`). AI-vs-AI duels never get past z≈-3, so props
   along the -z wall don't move AI balance (2026-10-17: identical 20-seed
   results before/after moving the counter) — only humans go there.
+  **Breakable window (2026-10-17, `shopWindow.ts`):** each pane between
+  mullions is a `Breakable` (`ragdoll.ts`): a slab just outside the glass
+  that ragdoll particles test after the solid obstacles. A particle hitting
+  it at ≥ `BREAK_SPEED` (1.5 m/s) shatters the pane and loses `BREAK_DRAG`
+  of its velocity; slower ones are pushed out like a wall. A living fighter
+  OVERPOWERED out of a blade lock (`stagger` with `dashLeft > 0`) into the
+  window wall breaks the pane too. Shards + the knocked display boxes fly
+  and settle on floor/pavement/road, jagged teeth stay in the frame,
+  `Sfx.glass` plays. `ragdollWalls()` (storefront.ts) replaces that wall's
+  ragdoll box with piers, bulkhead and header, so corpses drape over the
+  sill through a broken pane but never leave the shop. All render-only
+  (uses `Math.random` freely — never in the sim); the fighter clamp is
+  unchanged and everything resets when a new round starts.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown by
   `main.ts` on round start.
 - `src/render/poses.ts` — joint Euler targets per stance/move phase.

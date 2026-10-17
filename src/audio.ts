@@ -191,6 +191,23 @@ export class Sfx {
     }
   }
 
+  /** Plate glass giving way: a crash, then the pieces landing for a while. */
+  glass(pan: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || this.muted) return;
+    const t = ctx.currentTime + 0.005;
+    const out = this.voice(Math.max(-0.7, Math.min(0.7, pan)));
+    this.noiseHit(out, t, 0.35, 'highpass', 3000, 1800, 0.7, 0.75);
+    this.noiseHit(out, t, 0.12, 'bandpass', 1200, 700, 1.5, 0.5);
+    this.tone(out, t, 'sine', 110, 55, 0.2, 0.4);
+    // tinkling as shards hit the floor
+    for (let i = 0; i < 16; i++) {
+      const dt = 0.08 + Math.random() * 0.9;
+      const f = 3000 + Math.random() * 5000;
+      this.tone(out, t + dt, 'sine', f, f * 0.97, 0.05 + Math.random() * 0.08, 0.05 + Math.random() * 0.1);
+    }
+  }
+
   // ---------- building blocks ----------
 
   private voice(pan: number): AudioNode {

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { FighterState, SimState, StageDef, WallSide } from '../sim/types';
 import { Clerk } from './clerk';
+import { buildFixture } from './fixtures';
+import { ShopWindow } from './shopWindow';
 import { buildStorefront, holedWallGeo, storefrontHoles, wallAngle } from './storefront';
 
 export interface SceneBundle {
@@ -9,6 +11,7 @@ export interface SceneBundle {
   renderer: THREE.WebGLRenderer;
   updateCamera: (a: FighterState, b: FighterState, dt: number) => void;
   updateProps: (sim: SimState) => void;
+  shopWindow: ShopWindow | null; // breakable display window, if the stage has a storefront
 }
 
 function ringLine(radius: number, y: number, color: string): THREE.LineLoop {
@@ -160,42 +163,61 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
   const knockables: Knockable[] = [];
   // Thin non-solid props flush to a wall (posters, signs) are wall decor:
   // they hide with their wall when it culls, instead of floating in mid-air.
-  // Walls indexed by outward normal: +z, -z, +x, -x.
-  const wallDecor: THREE.Object3D[][] = [[], [], [], []];
+  // Tall furniture against a wall (shelving) hides once the camera is past
+  // its front, so it never blocks the shot from behind. `limit` = how far
+  // out along that wall's normal the camera may go. Walls indexed by
+  // outward normal: +z, -z, +x, -x.
+  interface Hugger { obj: THREE.Object3D; limit: number }
+  const wallDecor: Hugger[][] = [[], [], [], []];
   const DECOR_INDEX: Record<WallSide, number> = { '+z': 0, '-z': 1, '+x': 2, '-x': 3 };
   const sf = stage.walls?.storefront;
+  let shopWindow: ShopWindow | null = null;
   if (sf) {
     // window frames, glass and the whole street go when their wall culls
     const front = buildStorefront(sf, stage.walls!);
-    scene.add(front);
-    wallDecor[DECOR_INDEX[sf.wall]].push(front);
+    scene.add(front.group);
+    wallDecor[DECOR_INDEX[sf.wall]].push({ obj: front.group, limit: stage.walls!.halfSize });
+    shopWindow = front.shopWindow;
   }
   const clerk = stage.clerk ? new Clerk(stage.clerk) : null;
   if (clerk) scene.add(clerk.root);
+  const animated: ((dt: number) => void)[] = [];
   const box = new THREE.Box3();
   let solidIndex = 0;
   for (const p of stage.props ?? []) {
-    const mat = new THREE.MeshLambertMaterial({ color: p.color });
-    if (p.emissive) mat.emissive = new THREE.Color(p.emissive);
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(p.size[0], p.size[1], p.size[2]), mat,
-    );
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(p.size[0], p.size[1], p.size[2]));
     mesh.position.set(p.pos[0], p.pos[1] + p.size[1] / 2, p.pos[2]);
     if (p.rot) mesh.rotation.y = (p.rot * Math.PI) / 180;
-    scene.add(mesh);
-    if (stage.walls && !p.solid) {
+    const fixture = buildFixture(p);
+    if (fixture) {
+      scene.add(fixture.object);
+      if (fixture.update) animated.push(fixture.update);
+    } else {
+      const mat = new THREE.MeshLambertMaterial({ color: p.color });
+      if (p.emissive) mat.emissive = new THREE.Color(p.emissive);
+      mesh.material = mat;
+      scene.add(mesh);
+    }
+    if (stage.walls) {
       const h = stage.walls.halfSize;
+      mesh.updateMatrixWorld();
       box.setFromObject(mesh);
+      const thin = (a: number, b: number): boolean => !p.solid && b - a < 0.2;
+      const tall = p.solid && p.size[1] >= 1.5;
       const wall =
-        box.max.z > h - 0.1 && box.max.z - box.min.z < 0.2 ? 0
-        : box.min.z < 0.1 - h && box.max.z - box.min.z < 0.2 ? 1
-        : box.max.x > h - 0.1 && box.max.x - box.min.x < 0.2 ? 2
-        : box.min.x < 0.1 - h && box.max.x - box.min.x < 0.2 ? 3
+        box.max.z > h - 0.1 && (thin(box.min.z, box.max.z) || tall) ? 0
+        : box.min.z < 0.1 - h && (thin(box.min.z, box.max.z) || tall) ? 1
+        : box.max.x > h - 0.1 && (thin(box.min.x, box.max.x) || tall) ? 2
+        : box.min.x < 0.1 - h && (thin(box.min.x, box.max.x) || tall) ? 3
         : -1;
-      if (wall >= 0) wallDecor[wall].push(mesh);
+      if (wall >= 0) {
+        // room-side face, measured out along the wall's normal
+        const face = [box.min.z, -box.max.z, box.min.x, -box.max.x][wall];
+        wallDecor[wall].push({ obj: fixture?.object ?? mesh, limit: tall ? face - 0.3 : h });
+      }
     }
     if (p.solid) {
-      if (p.knockable) {
+      if (p.knockable && !fixture) {
         knockables.push({
           mesh, obIndex: solidIndex,
           pos0: mesh.position.clone(), quat0: mesh.quaternion.clone(),
@@ -282,13 +304,14 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
     rim.position.set(camTarget.x - perp.x * 6, 4.5, camTarget.z - perp.z * 6);
     rim.target.position.copy(camTarget);
     clerk?.update(dt, camTarget);
+    for (const tick of animated) tick(dt);
     if (stage.walls) {
       // a wall culls once the camera is behind it; take its decor along
-      const h = stage.walls.halfSize, c = camera.position;
-      const inside = [c.z < h, c.z > -h, c.x < h, c.x > -h];
-      for (let i = 0; i < 4; i++) for (const m of wallDecor[i]) m.visible = inside[i];
+      const c = camera.position;
+      const out = [c.z, -c.z, c.x, -c.x];
+      for (let i = 0; i < 4; i++) for (const d of wallDecor[i]) d.obj.visible = out[i] < d.limit;
     }
   };
 
-  return { scene, camera, renderer, updateCamera, updateProps };
+  return { scene, camera, renderer, updateCamera, updateProps, shopWindow };
 }

@@ -3,7 +3,7 @@ import { CharacterDef, FighterState, Obstacle, WeaponDef } from '../sim/types';
 import {
   JointName, kneelLegs, lockPose, movePoses, parryPose, Pose, staggerPose, stancePoses,
 } from './poses';
-import { Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
+import { Breakable, Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
 import {
   ballGeo, blobGeo, clothGeo, faceGroup, haoriGroup, haoriSleeveGeo, hairGroup, handGroup,
   headbandGroup, headGeo, headScale, jacketDetails, kyahanGroup, limbGeo, mat, mesh,
@@ -571,7 +571,7 @@ export class FighterView {
       seg('handR', 'swordTip', [['wristR', 0]], true),
     ];
 
-    this.ragdoll = new Ragdoll(particles, sticks, segments, this.liveObstacles);
+    this.ragdoll = new Ragdoll(particles, sticks, segments, this.liveObstacles, this.breakables);
     (this.root.parent as THREE.Object3D).add(this.ragdoll.group);
     this.body.visible = false;
   }
@@ -590,6 +590,8 @@ export class FighterView {
   }
 
   private liveObstacles: Obstacle[] = [];
+  /** Glass the corpse can go through (the shop window), shared with the scene. */
+  breakables: Breakable[] = [];
   private shadowPos = new THREE.Vector3();
 
   update(f: FighterState, dt: number, liveObstacles?: Obstacle[]): void {

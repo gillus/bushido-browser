@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { StageStorefront, StageWalls, WallSide } from '../sim/types';
+import { Obstacle, StageStorefront, StageWalls, WallSide, wallObstacles } from '../sim/types';
 import { mesh, shade } from './parts';
+import { ShopWindow } from './shopWindow';
 
 /**
  * Shop front: a display window and a glass door cut into one room wall,
@@ -46,6 +47,30 @@ export function holedWallGeo(w: number, h: number, holes: [number, number, numbe
   return g;
 }
 
+/**
+ * Ragdoll walls (`wallObstacles`) with the display window left open: the
+ * storefront wall becomes two piers, the bulkhead under the sill (corpses
+ * drape over it) and the header. The glass itself is `ShopWindow.panes`.
+ */
+export function ragdollWalls(walls: StageWalls): Obstacle[] {
+  const all = wallObstacles(walls);
+  const sf = walls.storefront;
+  if (!sf) return all;
+  const t = 0.5, o = walls.halfSize + t, span = walls.halfSize + 2 * t, H = walls.height;
+  const a = wallAngle(sf.wall), c = Math.cos(a), s = Math.sin(a);
+  const cx = -Math.sin(a) * o, cz = -Math.cos(a) * o;
+  const piece = (x0: number, x1: number, y0: number, y1: number): Obstacle => {
+    const m = (x0 + x1) / 2;
+    return { x: cx + m * c, z: cz - m * s, halfW: (x1 - x0) / 2, halfD: t, y0, y1, c, s };
+  };
+  const [wx0, wx1, sill, head] = sf.window;
+  const index = { '+z': 0, '-z': 1, '+x': 2, '-x': 3 }[sf.wall]; // wallObstacles order
+  all.splice(index, 1,
+    piece(-span, wx0, 0, H), piece(wx1, span, 0, H),
+    piece(wx0, wx1, 0, sill), piece(wx0, wx1, head, H));
+  return all;
+}
+
 /** The holes a storefront cuts into its wall. */
 export function storefrontHoles(sf: StageStorefront): [number, number, number, number][] {
   return [sf.window, [sf.door[0], sf.door[1], 0, sf.door[2]]];
@@ -80,7 +105,7 @@ function hash(i: number, j: number): number {
  * Window glass: a faint blue tint, a few reflection streaks and the shop's
  * vinyl lettering — which reads backwards from inside, as it should.
  */
-function glassTexture(sf: StageStorefront, wM: number, hM: number): THREE.CanvasTexture {
+export function glassTexture(sf: StageStorefront, wM: number, hM: number): THREE.CanvasTexture {
   const W = 1024, H = Math.round((W * hM) / wM);
   const [cv, g] = canvas(W, H);
   g.fillStyle = 'rgba(150,190,225,0.1)';
@@ -144,14 +169,6 @@ function frameAndGlass(sf: StageStorefront, trim: string): THREE.Group {
     const x = wx0 + ((wx1 - wx0) * k) / (n + 1);
     g.add(slab(x - t * 0.4, x + t * 0.4, sill, head, z0, z1, frame));
   }
-  const glass = new THREE.Mesh(
-    new THREE.PlaneGeometry(wx1 - wx0, head - sill),
-    new THREE.MeshBasicMaterial({
-      map: glassTexture(sf, wx1 - wx0, head - sill), transparent: true, depthWrite: false,
-    }),
-  );
-  glass.position.set((wx0 + wx1) / 2, (sill + head) / 2, -0.03);
-  g.add(glass);
   // game boxes on the ledge, backs to the room (fronts are for the street)
   const spines = ['#8f2f2f', '#2f4f8f', '#2f7a4f', '#8f7a2f', '#5a2f8f', '#e8e4da', '#1a1c22'];
   for (let x = wx0 + 0.25, i = 0; x < wx1 - 0.25; i++) {
@@ -160,6 +177,7 @@ function frameAndGlass(sf: StageStorefront, trim: string): THREE.Group {
     const w = big ? 0.42 : 0.14, hgt = big ? 0.3 : 0.19, d = big ? 0.1 : 0.016;
     const box = slab(x, x + w, sill + 0.02, sill + 0.02 + hgt, 0.04, 0.04 + d, spines[Math.floor(hash(i, 5) * spines.length)]);
     box.rotation.y = (hash(i, 9) - 0.5) * 0.3;
+    box.userData.display = d / 2; // ShopWindow knocks these out with the glass
     g.add(box);
     x += w + 0.03 + hash(i, 11) * 0.08;
   }
@@ -395,12 +413,14 @@ function street(len: number): THREE.Group {
 }
 
 /** Window, door, glass, display ledge and the street, placed at their wall. */
-export function buildStorefront(sf: StageStorefront, walls: StageWalls): THREE.Group {
+export function buildStorefront(sf: StageStorefront, walls: StageWalls): { group: THREE.Group; shopWindow: ShopWindow } {
   const g = new THREE.Group();
   const a = wallAngle(sf.wall);
   g.rotation.y = a;
   g.position.set(-Math.sin(a) * walls.halfSize, -0.02, -Math.cos(a) * walls.halfSize);
   g.add(frameAndGlass(sf, walls.trim ?? walls.color));
   g.add(street(walls.halfSize * 2 + 20));
-  return g;
+  const [wx0, wx1, sill, head] = sf.window;
+  const shopWindow = new ShopWindow(sf, g, glassTexture(sf, wx1 - wx0, head - sill));
+  return { group: g, shopWindow };
 }

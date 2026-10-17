@@ -24,6 +24,22 @@ const GROUND_FRICTION = 0.55;
 const ITERATIONS = 4;
 
 interface Particle { pos: THREE.Vector3; prev: THREE.Vector3; radius: number; }
+
+/**
+ * A box that blocks like an obstacle until a particle hits it at
+ * `breakSpeed` or faster — then `shatter` runs, `broken` goes true and
+ * everything passes (a shop window). Shared by reference, so one break
+ * opens it for every ragdoll.
+ */
+export interface Breakable {
+  ob: Obstacle;
+  broken: boolean;
+  breakSpeed: number; // m/s
+  shatter(at: THREE.Vector3, vel: THREE.Vector3): void;
+}
+
+/** Glass soaks up this much of the speed of whatever goes through it. */
+const BREAK_DRAG = 0.3;
 interface Stick { a: Particle; b: Particle; len: number; }
 
 /**
@@ -44,6 +60,7 @@ export class Ragdoll {
     stickPairs: [string, string][],
     segments: RagdollSegmentInit[],
     private obstacles: Obstacle[] = [],
+    private breakables: Breakable[] = [],
   ) {
     for (const p of particles) {
       this.parts.set(p.name, {
@@ -105,32 +122,47 @@ export class Ragdoll {
           p.prev.x = p.pos.x - (p.pos.x - p.prev.x) * (1 - GROUND_FRICTION);
           p.prev.z = p.pos.z - (p.pos.z - p.prev.z) * (1 - GROUND_FRICTION);
         }
-        for (const ob of this.obstacles) {
-          const r = p.radius;
-          const dx = p.pos.x - ob.x, dz = p.pos.z - ob.z;
-          const lx = dx * ob.c - dz * ob.s;
-          const lz = dx * ob.s + dz * ob.c;
-          const px = ob.halfW + r - Math.abs(lx);
-          const pz = ob.halfD + r - Math.abs(lz);
-          const py = ob.y1 + r - p.pos.y;
-          if (px <= 0 || pz <= 0 || py <= 0 || p.pos.y < ob.y0) continue;
-          if (py <= px && py <= pz) {
-            // came down on top: rest there, with furniture friction
-            p.pos.y = ob.y1 + r;
-            p.prev.x = p.pos.x - (p.pos.x - p.prev.x) * (1 - GROUND_FRICTION);
-            p.prev.z = p.pos.z - (p.pos.z - p.prev.z) * (1 - GROUND_FRICTION);
-          } else if (px <= pz) {
-            const nlx = (lx >= 0 ? 1 : -1) * (ob.halfW + r);
-            p.pos.x = ob.x + nlx * ob.c + lz * ob.s;
-            p.pos.z = ob.z - nlx * ob.s + lz * ob.c;
+        for (const ob of this.obstacles) this.collide(p, ob);
+        for (const b of this.breakables) {
+          if (b.broken || !this.collide(p, b.ob, true)) continue;
+          const vel = p.pos.clone().sub(p.prev).divideScalar(H);
+          if (vel.length() >= b.breakSpeed) {
+            b.shatter(p.pos, vel);
+            p.prev.lerp(p.pos, BREAK_DRAG); // straight through, a little slower
           } else {
-            const nlz = (lz >= 0 ? 1 : -1) * (ob.halfD + r);
-            p.pos.x = ob.x + lx * ob.c + nlz * ob.s;
-            p.pos.z = ob.z - lx * ob.s + nlz * ob.c;
+            this.collide(p, b.ob);
           }
         }
       }
     }
+  }
+
+  /** Push `p` out of a yaw-rotated box; with `test`, only report overlap. */
+  private collide(p: Particle, ob: Obstacle, test = false): boolean {
+    const r = p.radius;
+    const dx = p.pos.x - ob.x, dz = p.pos.z - ob.z;
+    const lx = dx * ob.c - dz * ob.s;
+    const lz = dx * ob.s + dz * ob.c;
+    const px = ob.halfW + r - Math.abs(lx);
+    const pz = ob.halfD + r - Math.abs(lz);
+    const py = ob.y1 + r - p.pos.y;
+    if (px <= 0 || pz <= 0 || py <= 0 || p.pos.y < ob.y0) return false;
+    if (test) return true;
+    if (py <= px && py <= pz) {
+      // came down on top: rest there, with furniture friction
+      p.pos.y = ob.y1 + r;
+      p.prev.x = p.pos.x - (p.pos.x - p.prev.x) * (1 - GROUND_FRICTION);
+      p.prev.z = p.pos.z - (p.pos.z - p.prev.z) * (1 - GROUND_FRICTION);
+    } else if (px <= pz) {
+      const nlx = (lx >= 0 ? 1 : -1) * (ob.halfW + r);
+      p.pos.x = ob.x + nlx * ob.c + lz * ob.s;
+      p.pos.z = ob.z - nlx * ob.s + lz * ob.c;
+    } else {
+      const nlz = (lz >= 0 ? 1 : -1) * (ob.halfD + r);
+      p.pos.x = ob.x + lx * ob.c + nlz * ob.s;
+      p.pos.z = ob.z - lx * ob.s + nlz * ob.c;
+    }
+    return true;
   }
 
   private sync(): void {

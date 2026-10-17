@@ -28,7 +28,7 @@ npm install
 npm run dev      # then open the printed localhost URL
 ```
 
-`npm run build` produces a small static bundle in `dist/` (~141 kB gzipped).
+`npm run build` produces a small static bundle in `dist/` (~155 kB gzipped).
 
 ## Controls
 
@@ -126,10 +126,15 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   props are obstacles: fighters collide, ragdolls drape over them, and the
   AI steers around them. Add `knockable` to a solid prop to make it
   cardboard: it topples on body contact instead of blocking, and pops back
-  up each round. Non-solid props are pure set dressing. `walls.storefront`
+  up each round. Non-solid props are pure set dressing. Add `"fixture": "shelf"`
+  (with a `label`, an `accent` colour and `stock`: `games`, `bigbox` or
+  `pegs`) or `"fixture": "kiosk"` to render a prop as stocked shelving or a
+  console demo kiosk instead of a plain box (front = local +z). `walls.storefront`
   cuts a display window and glass door into one wall (with the street
   outside, and the shop name on the glass); `clerk` places the shop
-  assistant behind the counter. Both are scenery only — the door stays shut.
+  assistant behind the counter. Both are scenery only — the door stays shut —
+  but the display window breaks when a corpse is flung into it or a fighter
+  is shoved through it out of a blade lock (fresh glass every round).
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
   pairs). New stage = new argument.
 

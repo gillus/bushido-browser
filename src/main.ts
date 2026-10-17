@@ -6,11 +6,11 @@ import { AIController } from './sim/ai';
 import { createSim, SimConfig, stepSim, TICK } from './sim/sim';
 import {
   CharacterDef, EMPTY_INPUT, InputFrame, Line, StageDef, WeaponDef, obstaclesFromStage,
-  wallObstacles,
 } from './sim/types';
 import { FighterView } from './render/fighterView';
 import { HitboxOverlay } from './render/hitboxDebug';
 import { createScene } from './render/scene';
+import { ragdollWalls } from './render/storefront';
 import { Sfx } from './audio';
 import { diffTick, snapshot } from './events';
 import { GamepadInput, PadRead } from './gamepad';
@@ -28,7 +28,8 @@ const fighterWeapons: [WeaponDef, WeaponDef] = [
 ];
 
 const obstacles = obstaclesFromStage(stage.props);
-const roomWalls = wallObstacles(stage.walls); // ragdolls only; sim uses arenaHalf
+// ragdolls only (sim uses arenaHalf); a shop window is left open — its panes are breakables
+const roomWalls = stage.walls ? ragdollWalls(stage.walls) : [];
 
 const cfg: SimConfig = {
   arenaRadius: stage.radius,
@@ -106,11 +107,12 @@ function readInput(keys: KeyMap, pad: PadRead | null, current: Line): InputFrame
 
 // ---------- scene ----------
 const app = document.getElementById('app')!;
-const { scene, camera, renderer, updateCamera, updateProps } = createScene(stage, app);
+const { scene, camera, renderer, updateCamera, updateProps, shopWindow } = createScene(stage, app);
 const views = [
   new FighterView(cfg.chars[0], fighterWeapons[0], [...obstacles, ...roomWalls]),
   new FighterView(cfg.chars[1], fighterWeapons[1], [...obstacles, ...roomWalls]),
 ];
+if (shopWindow) for (const v of views) v.breakables = shopWindow.panes;
 scene.add(views[0].root, views[1].root);
 // H toggles the sim's real hitboxes (body circle + attack wedge)
 const hitboxes = [new HitboxOverlay(cfg.moves[0]), new HitboxOverlay(cfg.moves[1])];
@@ -237,6 +239,10 @@ function frame(now: number): void {
   hitboxes[0].update(sim.fighters[0]);
   hitboxes[1].update(sim.fighters[1]);
   updateProps(sim);
+  for (const at of shopWindow?.update(sim, dt) ?? []) {
+    panProbe.copy(at).project(camera);
+    sfx.glass(panProbe.x);
+  }
   updateCamera(sim.fighters[0], sim.fighters[1], dt);
   updatePans();
   renderHud();
