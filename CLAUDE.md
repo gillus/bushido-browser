@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~158 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~159 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -128,8 +128,8 @@ Each future stage = a location + a dumb argument that went too far.
   them off the spawn corridor x≈0, z∈[-3,3]); `knockable: true` on a solid
   prop makes it cardboard — topples on touch, back up next round; non-solid
   props are pure set dressing.
-  **Fixtures (2026-10-17, `fixtures.ts`, `kiosk.ts`):** a prop with `"fixture":
-  "shelf" | "kiosk"` keeps its box as the collider but renders as shop
+  **Fixtures (2026-10-17, `fixtures.ts`, `kiosk.ts`, `arcade.ts`):** a prop with
+  `"fixture": "shelf" | "kiosk" | "arcade"` keeps its box as the collider but renders as shop
   furniture built inside it — front = local +z, so a +z-wall shelf has
   `rot: 180`, -x wall `90`, +x wall `-90`. Shelves take `label` (lit
   header sign), `accent` (sign colour) and `stock`: `games` (jewel/keep
@@ -138,7 +138,12 @@ Each future stage = a location + a dumb argument that went too far.
   the prop's position (same shelves every load); all boxes of one fixture
   merge into a single vertex-coloured mesh (`BoxBatch`) — one draw call
   per shelf. The kiosk is a demo unit (tethered pad, CRT running a canvas
-  attract-mode loop at 12 fps) and is breakable — see below. Solid props
+  attract-mode loop at 12 fps); the arcade is an upright cabinet (coin
+  door, two-player panel, tilted monitor running a shooter's attract loop,
+  `label` on the lit marquee). Both are breakable — see below. The arcade
+  replaced a non-solid stack of CRTs on the same solid footprint: the sim
+  sees identical obstacles (only the ragdoll-only `y1` grew), so AI balance
+  is untouched. Solid props
   ≥ 1.5 m tall flush to a wall hide once the camera is within 0.3 m of
   their front (`wallDecor` limits in `scene.ts`), so wall shelving never
   blocks the shot from behind. AI-vs-AI is unchanged by the wall shelving
@@ -179,11 +184,13 @@ Each future stage = a location + a dumb argument that went too far.
   sill through a broken pane but never leave the shop. All render-only
   (uses `Math.random` freely — never in the sim); the fighter clamp is
   unchanged and everything resets when a new round starts.
-  *Kiosk* (`kiosk.ts`, `BREAK_SPEED` 2 m/s): a `solid` Breakable — its
+  *Kiosk and arcade* (`CrtCabinet` in `cabinet.ts`; `kiosk.ts` and
+  `arcade.ts` only build the furniture, the tube and the `topper` and pass
+  a `CrtScreen` its attract loop; `BREAK_SPEED` 2 m/s): a `solid` Breakable — its
   box is also a normal obstacle and keeps blocking once broken. The CRT
   implodes (flash, picture folds to a dot, hole + cracks drawn on the
   screen canvas, static on each later spark pop), face glass and sparks
-  spray out, the topper sign falls off and lands flat, and the cabinet
+  spray out, the topper (kiosk sign, arcade marquee) falls off and lands flat, and the cabinet
   rocks along the blow. It deliberately never topples: the sim collider
   stays upright, so a toppled render would leave fighters bumping into
   air and corpses leaning on nothing. `Sfx.crt` / `Sfx.spark`.

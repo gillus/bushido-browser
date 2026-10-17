@@ -28,7 +28,7 @@ npm install
 npm run dev      # then open the printed localhost URL
 ```
 
-`npm run build` produces a small static bundle in `dist/` (~158 kB gzipped).
+`npm run build` produces a small static bundle in `dist/` (~159 kB gzipped).
 
 ## Controls
 
@@ -86,13 +86,14 @@ Pads rumble when you're cut, killed, deflected or parried.
   `minReach` dead zone: inside the haft its swings only glance (the handle
   smacks and wounds, never cleanly kills). The tube wants to live inside that
   zone; the broom wants to keep you out of it.
-- **The furniture is real.** Bargain bin, CRT demo kiosk, display table —
+- **The furniture is real.** Bargain bin, CRT demo kiosk, arcade cabinet,
+  display table —
   you can't walk through them, and neither can he. Put a box between you
   and a broom. Corpses land on the merchandise. (Swings sweep *over*
   furniture — only bodies collide.) The cardboard standee is the exception:
   touch it and it goes down, and stays down until the next round. Nobody
-  ever respects the standee. Throw someone through the shop window or into
-  the demo kiosk and it breaks — the shop is fixed before the next round.
+  ever respects the standee. Throw someone through the shop window, into
+  the demo kiosk or into the arcade cabinet and it breaks — the shop is fixed before the next round.
 - **Tsubazeriai.** If your cut lands while his is already coming down the
   *same* line, the weapons meet and lock guard-to-guard. Hammer attack to
   push; whoever drives the meter to the end throws the other off balance
@@ -129,12 +130,13 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   cardboard: it topples on body contact instead of blocking, and pops back
   up each round. Non-solid props are pure set dressing. Add `"fixture": "shelf"`
   (with a `label`, an `accent` colour and `stock`: `games`, `bigbox` or
-  `pegs`) or `"fixture": "kiosk"` to render a prop as stocked shelving or a
-  console demo kiosk instead of a plain box (front = local +z). `walls.storefront`
+  `pegs`), `"fixture": "kiosk"` or `"fixture": "arcade"` (the `label` is
+  the game on its marquee) to render a prop as stocked shelving, a console
+  demo kiosk or an upright arcade cabinet instead of a plain box (front = local +z). `walls.storefront`
   cuts a display window and glass door into one wall (with the street
   outside, and the shop name on the glass); `clerk` places the shop
   assistant behind the counter. Both are scenery only — the door stays shut —
-  but the display window and the demo kiosk break when a corpse is flung
+  but the display window, the demo kiosk and the arcade cabinet break when a corpse is flung
   into them or a fighter is shoved into them out of a blade lock
   (everything is repaired for the next round).
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`

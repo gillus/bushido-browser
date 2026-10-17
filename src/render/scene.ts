@@ -3,6 +3,7 @@ import { FighterState, SimState, StageDef, WallSide } from '../sim/types';
 import { Clerk } from './clerk';
 import { Smashable } from './debris';
 import { buildShelf } from './fixtures';
+import { Arcade } from './arcade';
 import { Kiosk } from './kiosk';
 import { buildStorefront, holedWallGeo, storefrontHoles, wallAngle } from './storefront';
 
@@ -188,9 +189,9 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(p.size[0], p.size[1], p.size[2]));
     mesh.position.set(p.pos[0], p.pos[1] + p.size[1] / 2, p.pos[2]);
     if (p.rot) mesh.rotation.y = (p.rot * Math.PI) / 180;
-    const kiosk = p.fixture === 'kiosk' ? new Kiosk(p) : null;
-    if (kiosk) smashables.push(kiosk);
-    const fixture = kiosk?.object ?? (p.fixture === 'shelf' ? buildShelf(p) : null);
+    const cabinet = p.fixture === 'kiosk' ? new Kiosk(p) : p.fixture === 'arcade' ? new Arcade(p) : null;
+    if (cabinet) smashables.push(cabinet);
+    const fixture = cabinet?.object ?? (p.fixture === 'shelf' ? buildShelf(p) : null);
     if (fixture) {
       scene.add(fixture);
     } else {
