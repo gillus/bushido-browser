@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~138 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~141 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -37,7 +37,22 @@ Each future stage = a location + a dumb argument that went too far.
   always matches the living outfit — add new body parts to a skin, never
   build a second copy for the ragdoll.
 - `src/main.ts` owns input edge-detection, the fixed-timestep accumulator
-  loop, and the HUD. Sim ticks and render frames are decoupled.
+  loop, and the HUD. Sim ticks and render frames are decoupled. Keyboard and
+  gamepad (`gamepad.ts`, polled once per render frame; pad edges accumulate
+  until a tick consumes them, same as `pressedThisTick`) merge per player.
+  Pad stance bumpers step relative to the fighter's current stance in main —
+  the sim's `InputFrame` is unchanged.
+- Audio + rumble (2026-10-17): `events.ts` diffs a `snapshot()` taken before
+  `stepSim` against the sim after it → `GameEvent`s (swing, deflect vs
+  parried — told apart by the defender's pre-tick phase — wound, kill, dash,
+  footsteps synced to the leg swing `walkCycle * 5.2`, stance, topple,
+  roundStart). `audio.ts` (`Sfx`) synthesizes every sound with Web Audio —
+  no audio files, ~3 kB gz. Sounds are what the props really make (cardboard
+  thock, broom whoosh, sneaker squeak); the framing plays it straight
+  (hyoshigi clappers on round start, one o-daiko hit per kill). Stages with
+  `walls` get a 100 Hz fluorescent-ballast hum. Never add event queues or
+  audio hooks to `src/sim/` — diff from outside. Audio unlocks on keydown/
+  pointerdown only (gamepad presses aren't user activation); N mutes.
 - Furniture collision (2026-08-20): stage props with `"solid": true` become
   yaw-rotated box colliders (`obstaclesFromStage` in `types.ts`) passed via
   `SimConfig.obstacles`. The sim resolves fighter-circle-vs-box pushout in

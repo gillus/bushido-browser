@@ -11,6 +11,10 @@ import {
 import { FighterView } from './render/fighterView';
 import { HitboxOverlay } from './render/hitboxDebug';
 import { createScene } from './render/scene';
+import { Sfx } from './audio';
+import { diffTick, snapshot } from './events';
+import { GamepadInput, PadRead } from './gamepad';
+import { Vector3 } from 'three';
 
 const characters = charactersJson as Record<string, CharacterDef>;
 const weapons = weaponsJson as unknown as Record<string, WeaponDef>;
@@ -38,10 +42,17 @@ let sim = createSim(cfg);
 let p2IsAI = true;
 let ai = new AIController(1337);
 
+// ---------- audio ----------
+const sfx = new Sfx(fighterWeapons, !!stage.walls); // walls = indoors = fluorescent hum
+// audio unlocks on the first gesture; gamepad presses don't count as one
+window.addEventListener('pointerdown', () => sfx.unlock());
+
 // ---------- input ----------
 const down = new Set<string>();
 const pressedThisTick = new Set<string>();
+const pads = new GamepadInput();
 window.addEventListener('keydown', (e) => {
+  sfx.unlock();
   if (!down.has(e.code)) pressedThisTick.add(e.code);
   down.add(e.code);
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'Slash'].includes(e.code)) {
@@ -68,17 +79,26 @@ const P2_KEYS: KeyMap = {
   high: 'Digit8', mid: 'Digit9', low: 'Digit0',
 };
 
-function readInput(keys: KeyMap): InputFrame {
+const STANCE_ORDER: Line[] = ['low', 'mid', 'high'];
+
+/** Keyboard + (optional) gamepad for one player; the two are merged. */
+function readInput(keys: KeyMap, pad: PadRead | null, current: Line): InputFrame {
+  const pp = pad?.pressed;
   let stance: Line | null = null;
-  if (pressedThisTick.has(keys.high)) stance = 'high';
-  else if (pressedThisTick.has(keys.mid)) stance = 'mid';
-  else if (pressedThisTick.has(keys.low)) stance = 'low';
+  if (pressedThisTick.has(keys.high) || pp?.has('high')) stance = 'high';
+  else if (pressedThisTick.has(keys.mid) || pp?.has('mid')) stance = 'mid';
+  else if (pressedThisTick.has(keys.low) || pp?.has('low')) stance = 'low';
+  else if (pp?.has('stanceUp') !== pp?.has('stanceDown')) {
+    const k = STANCE_ORDER.indexOf(current) + (pp!.has('stanceUp') ? 1 : -1);
+    stance = STANCE_ORDER[Math.max(0, Math.min(2, k))];
+  }
+  const clamp = (v: number) => Math.max(-1, Math.min(1, v));
   return {
-    moveY: (down.has(keys.fwd) ? 1 : 0) - (down.has(keys.back) ? 1 : 0),
-    moveX: (down.has(keys.right) ? 1 : 0) - (down.has(keys.left) ? 1 : 0),
-    attack: pressedThisTick.has(keys.attack),
-    dash: pressedThisTick.has(keys.dash),
-    parry: pressedThisTick.has(keys.parry),
+    moveY: clamp((down.has(keys.fwd) ? 1 : 0) - (down.has(keys.back) ? 1 : 0) + (pad?.moveY ?? 0)),
+    moveX: clamp((down.has(keys.right) ? 1 : 0) - (down.has(keys.left) ? 1 : 0) + (pad?.moveX ?? 0)),
+    attack: pressedThisTick.has(keys.attack) || !!pp?.has('attack'),
+    dash: pressedThisTick.has(keys.dash) || !!pp?.has('dash'),
+    parry: pressedThisTick.has(keys.parry) || !!pp?.has('parry'),
     stance,
   };
 }
@@ -138,7 +158,21 @@ function renderHud(): void {
     ` &nbsp;${'◆'.repeat(b.score)}<br>` +
     `<span class="stance">${STANCE_LABEL[b.stance]}</span>${woundTags(b)}`;
   hud.msg.textContent = sim.messageTimer > 0 ? sim.message : '';
-  hud.mode.textContent = p2IsAI ? `${cfg.chars[1].name}: AI (M for 2P)` : `${cfg.chars[1].name}: HUMAN (M for AI)`;
+  const status = [
+    p2IsAI ? `${cfg.chars[1].name}: AI (M for 2P)` : `${cfg.chars[1].name}: HUMAN (M for AI)`,
+    pads.count ? `${pads.count} PAD${pads.count > 1 ? 'S' : ''}` : '',
+    sfx.muted ? 'SOUND OFF (N)' : sfx.locked ? 'CLICK OR PRESS A KEY FOR SOUND' : '',
+  ];
+  hud.mode.textContent = status.filter(Boolean).join(' · ');
+}
+
+// stereo-pan each fighter by where they sit on screen
+const panProbe = new Vector3();
+function updatePans(): void {
+  sim.fighters.forEach((f, i) => {
+    panProbe.set(f.pos.x, 1, f.pos.z).project(camera);
+    sfx.setPan(i, panProbe.x);
+  });
 }
 
 // ---------- loop ----------
@@ -150,26 +184,38 @@ function frame(now: number): void {
   const dt = Math.min(0.25, (now - last) / 1000);
   last = now;
   acc += dt;
+  pads.poll();
 
   while (acc >= TICK) {
-    if (pressedThisTick.has('KeyM')) {
+    if (pressedThisTick.has('KeyM') || pads.any('toggleAI')) {
       p2IsAI = !p2IsAI;
       ai = new AIController((Math.random() * 1e9) | 0);
     }
-    if (pressedThisTick.has('KeyR')) { sim = createSim(cfg); pickQuote(); }
+    if (pressedThisTick.has('KeyR') || pads.any('reset')) { sim = createSim(cfg); pickQuote(); }
     if (pressedThisTick.has('KeyH')) {
       for (const hb of hitboxes) hb.group.visible = !hb.group.visible;
     }
+    if (pressedThisTick.has('KeyN')) sfx.toggleMute();
 
+    const [a, b] = sim.fighters;
     const inputs: [InputFrame, InputFrame] =
       sim.roundPhase === 'fight'
-        ? [readInput(P1_KEYS), p2IsAI ? ai.update(sim, cfg, 1) : readInput(P2_KEYS)]
+        ? [
+          readInput(P1_KEYS, pads.read(0), a.stance),
+          p2IsAI ? ai.update(sim, cfg, 1) : readInput(P2_KEYS, pads.read(1), b.stance),
+        ]
         : [{ ...EMPTY_INPUT }, { ...EMPTY_INPUT }];
 
     const wasEnded = sim.roundPhase === 'end';
+    const before = snapshot(sim);
     stepSim(sim, cfg, inputs);
+    for (const ev of diffTick(before, sim)) {
+      sfx.play(ev);
+      pads.rumble(ev);
+    }
     if (wasEnded && sim.roundPhase === 'fight') pickQuote();
     pressedThisTick.clear();
+    pads.clearPressed();
     acc -= TICK;
   }
 
@@ -185,6 +231,7 @@ function frame(now: number): void {
   hitboxes[1].update(sim.fighters[1]);
   updateProps(sim);
   updateCamera(sim.fighters[0], sim.fighters[1], dt);
+  updatePans();
   renderHud();
   renderer.render(scene, camera);
 }

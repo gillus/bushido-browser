@@ -16,8 +16,8 @@ straight.
 
 **[Play in your browser → gillus.github.io/bushido-browser](https://gillus.github.io/bushido-browser/)**
 
-No install, keyboard only. You start against the AI (it plays Sticchio);
-press **M** to switch to two players on one keyboard. Every push to `main` redeploys it via GitHub
+No install; keyboard or gamepad. You start against the AI (it plays Sticchio);
+press **M** to switch to two players on one keyboard (or two pads). Every push to `main` redeploys it via GitHub
 Actions.
 
 ## Run locally
@@ -27,7 +27,7 @@ npm install
 npm run dev      # then open the printed localhost URL
 ```
 
-`npm run build` produces a small static bundle in `dist/` (~138 kB gzipped).
+`npm run build` produces a small static bundle in `dist/` (~141 kB gzipped).
 
 ## Controls
 
@@ -39,7 +39,24 @@ npm run dev      # then open the printed localhost URL
 | Parry      | Space       | /             |
 | Stance     | 1 / 2 / 3   | 8 / 9 / 0     |
 
+Gamepads (any pad the browser reports with the standard layout; Xbox names,
+PlayStation in brackets). The first pad connected is P1, the second is P2. Keyboard keeps working
+alongside.
+
+| Action     | Pad |
+|------------|-----|
+| Move       | Left stick or D-pad (analog: half tilt = slow walk) |
+| Attack     | A (✕) |
+| Dash       | B (○) |
+| Parry      | X (□) |
+| Stance     | RB/RT raise · LB/LT lower — or flick the right stick: up Jodan, sideways Chudan, down Gedan |
+| Toggle AI / reset | Back (Share) / Start (Options) |
+
+Pads rumble when you're cut, killed, deflected or parried.
+
 - **M** — toggle P2 between AI and human. **R** — reset the match.
+  **N** — sound on/off (remembered). Browsers keep audio locked until you click or
+  press a key, and a gamepad press doesn't count.
   **H** — show the real hitboxes (body circle + attack wedge; red = kill zone, amber = glancing).
 - Movement is opponent-relative: forward/back closes/opens distance, left/right circles.
 
@@ -114,7 +131,11 @@ Animation poses (joint Euler angles per stance / move phase) live in
   swap the articulated body for a verlet ragdoll (16 particles, braced stick
   constraints, ground friction) seeded from the skeleton's world pose with an
   impulse away from the killer — the weapon stays in the death grip.
-- `src/main.ts` — input edge-detection, fixed-timestep loop, HUD, bicker lines.
+- `src/main.ts` — input edge-detection (keyboard + `gamepad.ts`), fixed-timestep loop, HUD, bicker lines.
+- `src/events.ts` — diffs the sim before/after each tick into presentation
+  events (swing, deflect, parried, wound, kill, step…) for `audio.ts` (procedural
+  Web Audio: every sound is synthesized, no audio files) and pad rumble. The
+  sim never knows it's being listened to.
 
 ## Roadmap ideas
 
