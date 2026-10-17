@@ -7,7 +7,7 @@ import { Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
 import {
   ballGeo, blobGeo, clothGeo, faceGroup, haoriGroup, haoriSleeveGeo, hairGroup, handGroup,
   headbandGroup, headGeo, headScale, jacketDetails, kyahanGroup, limbGeo, mat, mesh,
-  muscleGeo, obiGroup, pelvisGeo, shade, shoeMesh, sneakerGroup, tasukiGroup, teeDetails,
+  muscleGeo, obiGroup, pelvisGeo, shade, shoeMesh, shortsLegGeo, sneakerGroup, tasukiGroup, teeDetails,
   torsoGeo,
 } from './parts';
 
@@ -164,6 +164,14 @@ export class FighterView {
     // pelvis
     const hipsSkin = skin('hips', this.hips);
     hipsSkin.add(mesh(pelvisGeo(b, h), legColor));
+    if (shorts) {
+      // crotch seam: the seat dips between the legs instead of ending flat
+      const crotch = mesh(blobGeo(0.07 * b, 0.05 * h, 0.1 * b, 6, 4), legColor);
+      crotch.position.y = -0.1 * h;
+      const seam = mesh(new THREE.BoxGeometry(0.012, 0.11 * h, 0.012), shade(legColor, 0.7));
+      seam.position.set(0, -0.06 * h, 0.12 * b);
+      hipsSkin.add(crotch, seam);
+    }
     if (street && !shorts) {
       // shirt tucked into belted jeans
       const belt = mesh(new THREE.CylinderGeometry(0.18 * b, 0.18 * b, 0.034, 10), '#2a2420');
@@ -350,10 +358,18 @@ export class FighterView {
       const kneeSkin = skin(knee, kneeG);
       if (street) {
         if (shorts) {
-          // cargo shorts to just past the knee, bare shins, tube socks
-          hipSkin.add(mesh(clothGeo(legW * 0.6, legW * 0.64, thighLen * 0.82), c.trim));
-          const pocket = mesh(new THREE.BoxGeometry(legW * 0.14, thighLen * 0.28, legW * 0.42), shade(c.trim, 0.85));
-          pocket.position.set(side * legW * 0.62, -thighLen * 0.55, 0);
+          // cargo shorts to just above the knee, bare shins, tube socks. Each
+          // leg tapers toward a rolled hem (a flared, pleated hem = skirt).
+          const shortsLen = thighLen * 0.78;
+          hipSkin.add(mesh(shortsLegGeo(legW * 0.6, legW * 0.5, shortsLen), c.trim));
+          const rollGeo = new THREE.CylinderGeometry(legW * 0.53, legW * 0.53, 0.035, 10, 1, true);
+          rollGeo.scale(1, 1, 0.88);
+          const roll = mesh(rollGeo, shade(c.trim, 0.82));
+          (roll.material as THREE.MeshLambertMaterial).side = THREE.DoubleSide;
+          roll.position.y = -shortsLen + 0.016;
+          hipSkin.add(roll);
+          const pocket = mesh(new THREE.BoxGeometry(legW * 0.14, thighLen * 0.26, legW * 0.4), shade(c.trim, 0.85));
+          pocket.position.set(side * legW * 0.58, -thighLen * 0.5, 0);
           hipSkin.add(pocket);
           kneeSkin.add(mesh(ballGeo(legW * 0.34), c.skin));
           kneeSkin.add(mesh(muscleGeo(legW * 0.36, legW * 0.45, legW * 0.27, shinLen, 0.3), c.skin));

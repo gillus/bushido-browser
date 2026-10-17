@@ -151,6 +151,42 @@ export interface StageDef {
   tileSize?: number;   // checker tile edge in meters (default 0.6)
   walls?: StageWalls;  // room box: its walls ARE the arena boundary
   props?: StageProp[];
+  clerk?: StageClerk;  // render-only shop assistant (never in the sim)
+}
+
+/** Which room wall, by its outward direction. */
+export type WallSide = '-z' | '+z' | '-x' | '+x';
+
+/**
+ * Shop front cut into one wall: a display window and a glass door, with
+ * the night street outside. Render-only — the sim still clamps fighters to
+ * the full square, so the door is shut and the glass holds. X ranges run
+ * along the wall, left → right as seen from inside the room.
+ */
+export interface StageStorefront {
+  wall: WallSide;
+  window: [number, number, number, number]; // x0, x1, sill y, head y
+  mullions?: number;                        // glazing bars across the window
+  door: [number, number, number];           // x0, x1, height
+  frame?: string;                           // aluminium frame color
+  lettering?: string;                       // vinyl shop name on the glass
+  tagline?: string;                         // smaller line under it
+  letteringColor?: string;
+  doorSign?: string;                        // card hung inside the door
+}
+
+/** Render-only shop clerk: stands where placed, scrolls his phone, glances up. */
+export interface StageClerk {
+  pos: [number, number, number];
+  rot: number;          // facing, degrees (0 = +z, like props)
+  heightScale: number;
+  bulk: number;
+  skin: string;
+  shirt: string;        // shop polo
+  trousers: string;
+  hair: string;
+  hairStyle?: NonNullable<CharacterShape['hair']>;
+  head?: NonNullable<CharacterShape['head']>;
 }
 
 /**
@@ -164,6 +200,7 @@ export interface StageWalls {
   height: number;
   color: string;
   trim?: string; // wainscot / baseboard color (lower band)
+  storefront?: StageStorefront;
 }
 
 /** One tick of intent for one fighter. attack/dash are edge-triggered. */

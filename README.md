@@ -126,7 +126,10 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   props are obstacles: fighters collide, ragdolls drape over them, and the
   AI steers around them. Add `knockable` to a solid prop to make it
   cardboard: it topples on body contact instead of blocking, and pops back
-  up each round. Non-solid props are pure set dressing.
+  up each round. Non-solid props are pure set dressing. `walls.storefront`
+  cuts a display window and glass door into one wall (with the street
+  outside, and the shop name on the glass); `clerk` places the shop
+  assistant behind the counter. Both are scenery only — the door stays shut.
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
   pairs). New stage = new argument.
 

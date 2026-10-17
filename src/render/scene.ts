@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { FighterState, SimState, StageDef } from '../sim/types';
+import { FighterState, SimState, StageDef, WallSide } from '../sim/types';
+import { Clerk } from './clerk';
+import { buildStorefront, holedWallGeo, storefrontHoles, wallAngle } from './storefront';
 
 export interface SceneBundle {
   scene: THREE.Scene;
@@ -39,7 +41,8 @@ function checkerTexture(a: string, b: string): THREE.CanvasTexture {
   return tex;
 }
 
-/** Four inward-facing walls: the one nearest the camera culls itself. */
+/** Four inward-facing walls: the one nearest the camera culls itself. A
+ *  storefront wall gets its window and door cut out. */
 function roomWalls(w: NonNullable<StageDef['walls']>): THREE.Group {
   const cv = document.createElement('canvas');
   cv.width = 8; cv.height = 128;
@@ -53,11 +56,18 @@ function roomWalls(w: NonNullable<StageDef['walls']>): THREE.Group {
   tex.colorSpace = THREE.SRGBColorSpace;
   const mat = new THREE.MeshLambertMaterial({ map: tex });
   const group = new THREE.Group();
-  for (let i = 0; i < 4; i++) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(w.halfSize * 2, w.height), mat);
-    const a = (i * Math.PI) / 2;
-    wall.position.set(-Math.sin(a) * w.halfSize, w.height / 2 - 0.02, -Math.cos(a) * w.halfSize);
-    wall.rotation.y = a; // plane faces +Z locally → faces the room centre
+  for (const side of ['-z', '-x', '+z', '+x'] as WallSide[]) {
+    const holed = w.storefront?.wall === side;
+    const wall = new THREE.Mesh(
+      holed
+        ? holedWallGeo(w.halfSize * 2, w.height, storefrontHoles(w.storefront!))
+        : new THREE.PlaneGeometry(w.halfSize * 2, w.height),
+      mat,
+    );
+    const a = wallAngle(side);
+    // plane faces +Z locally → faces the room centre (holed geometry starts at y=0)
+    wall.position.set(-Math.sin(a) * w.halfSize, (holed ? 0 : w.height / 2) - 0.02, -Math.cos(a) * w.halfSize);
+    wall.rotation.y = a;
     group.add(wall);
   }
   // unlit ceiling: black with glowing fluorescent strips (no extra lights)
@@ -152,6 +162,16 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
   // they hide with their wall when it culls, instead of floating in mid-air.
   // Walls indexed by outward normal: +z, -z, +x, -x.
   const wallDecor: THREE.Object3D[][] = [[], [], [], []];
+  const DECOR_INDEX: Record<WallSide, number> = { '+z': 0, '-z': 1, '+x': 2, '-x': 3 };
+  const sf = stage.walls?.storefront;
+  if (sf) {
+    // window frames, glass and the whole street go when their wall culls
+    const front = buildStorefront(sf, stage.walls!);
+    scene.add(front);
+    wallDecor[DECOR_INDEX[sf.wall]].push(front);
+  }
+  const clerk = stage.clerk ? new Clerk(stage.clerk) : null;
+  if (clerk) scene.add(clerk.root);
   const box = new THREE.Box3();
   let solidIndex = 0;
   for (const p of stage.props ?? []) {
@@ -261,6 +281,7 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
     // rim light from the far side of the fighters, high and behind
     rim.position.set(camTarget.x - perp.x * 6, 4.5, camTarget.z - perp.z * 6);
     rim.target.position.copy(camTarget);
+    clerk?.update(dt, camTarget);
     if (stage.walls) {
       // a wall culls once the camera is behind it; take its decor along
       const h = stage.walls.halfSize, c = camera.position;

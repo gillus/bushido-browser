@@ -45,6 +45,24 @@ export function muscleGeo(rTop: number, rBulge: number, rBot: number, len: numbe
   return g;
 }
 
+/**
+ * One leg of a pair of shorts: full at the seat, tapering to the hem, and
+ * the hem is an opening (the end dishes up inside) rather than a flat lid.
+ */
+export function shortsLegGeo(rTop: number, rBot: number, len: number, radial = 10): THREE.BufferGeometry {
+  const pts = [
+    new THREE.Vector2(0.001, 0),
+    new THREE.Vector2(rTop, 0),
+    new THREE.Vector2(rTop * 1.03, -len * 0.25),
+    new THREE.Vector2(rBot, -len),
+    new THREE.Vector2(rBot * 0.8, -len + 0.012),
+    new THREE.Vector2(0.001, -len + 0.06),
+  ];
+  const g = new THREE.LatheGeometry(pts, radial);
+  g.scale(1, 1, 0.88);
+  return g;
+}
+
 /** Joint ball (elbow / knee / shoulder) — hides the gap when a limb bends. */
 export function ballGeo(r: number): THREE.BufferGeometry {
   return new THREE.SphereGeometry(r, 8, 6);

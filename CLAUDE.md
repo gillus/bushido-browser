@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~145 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~150 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -128,6 +128,20 @@ Each future stage = a location + a dumb argument that went too far.
   them off the spawn corridor x≈0, z∈[-3,3]); `knockable: true` on a solid
   prop makes it cardboard — topples on touch, back up next round; non-solid
   props are pure set dressing.
+  **Storefront (2026-10-17):** `walls.storefront` cuts a display window +
+  glass door into one wall (`holedWallGeo`) and `storefront.ts` builds the
+  frames, mirrored vinyl lettering, a ledge of games, and the night street
+  outside (pavement, parked car, sodium lamps, blocks with lit windows).
+  All of it is one group that hides with its wall, like wall decor, so the
+  cutaway camera never ends up inside the street. Render-only: the sim still
+  clamps to the full square — the door is shut. Far facades, lamps and light
+  pools set `fog: false` (the room fog would erase the far kerb). The
+  cashier is ordinary solid props (L-counter boxed into the corner beside
+  the door); `stage.clerk` adds the render-only shop assistant (`clerk.ts`,
+  built from the fighter parts: phone, head down, glances at the duel every
+  ~8 s via `updateCamera`). AI-vs-AI duels never get past z≈-3, so props
+  along the -z wall don't move AI balance (2026-10-17: identical 20-seed
+  results before/after moving the counter) — only humans go there.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown by
   `main.ts` on round start.
 - `src/render/poses.ts` — joint Euler targets per stance/move phase.

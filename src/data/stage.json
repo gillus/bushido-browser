@@ -1,5 +1,5 @@
 {
-  "name": "GAME OVER \u2014 the videogame shop",
+  "name": "GAME OVER — the videogame shop",
   "radius": 6.5,
   "gridSize": 16,
   "gridDivisions": 16,
@@ -11,7 +11,32 @@
   "floorColor": "#1e2027",
   "floorTile": "#262932",
   "tileSize": 0.6,
-  "walls": {"halfSize": 7.0, "height": 3.6, "color": "#2b2735", "trim": "#1e1b26"},
+  "walls": {
+    "halfSize": 7.0,
+    "height": 3.6,
+    "color": "#2b2735",
+    "trim": "#1e1b26",
+    "storefront": {
+      "wall": "-z",
+      "window": [
+        -6.3,
+        3.3,
+        0.6,
+        2.7
+      ],
+      "mullions": 3,
+      "door": [
+        3.8,
+        4.9,
+        2.35
+      ],
+      "frame": "#5d636e",
+      "lettering": "GAME OVER",
+      "tagline": "VIDEOGAMES · BUY · SELL · TRADE",
+      "letteringColor": "#e8c84a",
+      "doorSign": "CLOSED"
+    }
+  },
   "props": [
     {
       "pos": [
@@ -224,73 +249,6 @@
         0.46
       ],
       "color": "#8f3f2f"
-    },
-    {
-      "pos": [
-        0,
-        0,
-        -6.53
-      ],
-      "size": [
-        3.2,
-        1.0,
-        0.9
-      ],
-      "color": "#2e3038",
-      "solid": true
-    },
-    {
-      "pos": [
-        0,
-        1.0,
-        -6.53
-      ],
-      "size": [
-        3.4,
-        0.08,
-        1.0
-      ],
-      "color": "#494d5a"
-    },
-    {
-      "pos": [
-        -1.0,
-        1.08,
-        -6.53
-      ],
-      "size": [
-        0.4,
-        0.35,
-        0.4
-      ],
-      "color": "#1a1c22"
-    },
-    {
-      "pos": [
-        0.4,
-        1.08,
-        -6.48
-      ],
-      "size": [
-        0.5,
-        0.12,
-        0.35
-      ],
-      "color": "#3a2f26"
-    },
-    {
-      "pos": [
-        0,
-        2.3,
-        -6.94
-      ],
-      "size": [
-        1.4,
-        0.45,
-        0.1
-      ],
-      "color": "#101510",
-      "emissive": "#3fa06a"
     },
     {
       "pos": [
@@ -537,6 +495,160 @@
       "rot": 35,
       "solid": true,
       "knockable": true
+    },
+    {
+      "pos": [
+        5.7,
+        0,
+        -6.1
+      ],
+      "size": [
+        0.6,
+        1.0,
+        1.8
+      ],
+      "color": "#2e3038",
+      "solid": true
+    },
+    {
+      "pos": [
+        6.2,
+        0,
+        -4.9
+      ],
+      "size": [
+        1.6,
+        1.0,
+        0.6
+      ],
+      "color": "#2a2c33",
+      "solid": true
+    },
+    {
+      "pos": [
+        5.7,
+        1.0,
+        -6.1
+      ],
+      "size": [
+        0.7,
+        0.06,
+        1.9
+      ],
+      "color": "#494d5a"
+    },
+    {
+      "pos": [
+        6.2,
+        1.0,
+        -4.9
+      ],
+      "size": [
+        1.66,
+        0.06,
+        0.66
+      ],
+      "color": "#3d6f78",
+      "emissive": "#12333a"
+    },
+    {
+      "pos": [
+        5.74,
+        1.06,
+        -6.35
+      ],
+      "size": [
+        0.42,
+        0.16,
+        0.4
+      ],
+      "color": "#1a1c22"
+    },
+    {
+      "pos": [
+        5.6,
+        1.22,
+        -6.35
+      ],
+      "size": [
+        0.06,
+        0.2,
+        0.3
+      ],
+      "color": "#101510",
+      "emissive": "#3fa06a"
+    },
+    {
+      "pos": [
+        5.62,
+        1.06,
+        -5.75
+      ],
+      "size": [
+        0.1,
+        0.04,
+        0.18
+      ],
+      "color": "#222428",
+      "rot": 15
+    },
+    {
+      "pos": [
+        5.76,
+        1.06,
+        -5.45
+      ],
+      "size": [
+        0.22,
+        0.03,
+        0.3
+      ],
+      "color": "#c9c2b0",
+      "rot": -8
+    },
+    {
+      "pos": [
+        6.96,
+        2.3,
+        -6.1
+      ],
+      "size": [
+        1.4,
+        0.45,
+        0.1
+      ],
+      "color": "#101510",
+      "rot": 90,
+      "emissive": "#3fa06a"
+    },
+    {
+      "pos": [
+        4.35,
+        -0.015,
+        -6.55
+      ],
+      "size": [
+        1.0,
+        0.012,
+        0.75
+      ],
+      "color": "#1c1f1a"
     }
-  ]
+  ],
+  "clerk": {
+    "pos": [
+      6.5,
+      0,
+      -6.2
+    ],
+    "rot": -90,
+    "heightScale": 1.0,
+    "bulk": 0.85,
+    "skin": "#e0b896",
+    "shirt": "#2f7a4a",
+    "trousers": "#2a3140",
+    "hair": "#3a2a1e",
+    "hairStyle": "messy",
+    "head": "round"
+  }
 }
