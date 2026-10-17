@@ -208,6 +208,30 @@ export class Sfx {
     }
   }
 
+  /** A CRT tube going: a hollow implosion thump, then the glass. */
+  crt(pan: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || this.muted) return;
+    const t = ctx.currentTime + 0.005;
+    const out = this.voice(Math.max(-0.7, Math.min(0.7, pan)));
+    this.tone(out, t, 'sine', 90, 32, 0.35, 0.7);
+    this.noiseHit(out, t, 0.18, 'lowpass', 900, 200, 1, 0.6);
+    this.tone(out, t, 'sawtooth', 15700, 15000, 0.08, 0.04); // the flyback whine cutting out
+    this.glass(pan);
+  }
+
+  /** Electrical crackle from a smashed set. */
+  spark(pan: number): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'running' || this.muted) return;
+    const t = ctx.currentTime + 0.005;
+    const out = this.voice(Math.max(-0.7, Math.min(0.7, pan)));
+    for (let i = 0; i < 4; i++) {
+      this.noiseHit(out, t + i * 0.03 + Math.random() * 0.02, 0.03, 'highpass', 2500, 1500, 0.8, 0.35);
+    }
+    this.tone(out, t, 'sawtooth', 120, 100, 0.12, 0.08);
+  }
+
   // ---------- building blocks ----------
 
   private voice(pan: number): AudioNode {

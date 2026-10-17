@@ -107,12 +107,12 @@ function readInput(keys: KeyMap, pad: PadRead | null, current: Line): InputFrame
 
 // ---------- scene ----------
 const app = document.getElementById('app')!;
-const { scene, camera, renderer, updateCamera, updateProps, shopWindow } = createScene(stage, app);
+const { scene, camera, renderer, updateCamera, updateProps, smashables } = createScene(stage, app);
 const views = [
   new FighterView(cfg.chars[0], fighterWeapons[0], [...obstacles, ...roomWalls]),
   new FighterView(cfg.chars[1], fighterWeapons[1], [...obstacles, ...roomWalls]),
 ];
-if (shopWindow) for (const v of views) v.breakables = shopWindow.panes;
+for (const v of views) v.breakables = smashables.flatMap((s) => s.breakables);
 scene.add(views[0].root, views[1].root);
 // H toggles the sim's real hitboxes (body circle + attack wedge)
 const hitboxes = [new HitboxOverlay(cfg.moves[0]), new HitboxOverlay(cfg.moves[1])];
@@ -239,9 +239,11 @@ function frame(now: number): void {
   hitboxes[0].update(sim.fighters[0]);
   hitboxes[1].update(sim.fighters[1]);
   updateProps(sim);
-  for (const at of shopWindow?.update(sim, dt) ?? []) {
-    panProbe.copy(at).project(camera);
-    sfx.glass(panProbe.x);
+  for (const s of smashables) {
+    for (const { at, kind } of s.update(sim, dt)) {
+      panProbe.copy(at).project(camera);
+      sfx[kind](panProbe.x);
+    }
   }
   updateCamera(sim.fighters[0], sim.fighters[1], dt);
   updatePans();

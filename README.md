@@ -28,7 +28,7 @@ npm install
 npm run dev      # then open the printed localhost URL
 ```
 
-`npm run build` produces a small static bundle in `dist/` (~155 kB gzipped).
+`npm run build` produces a small static bundle in `dist/` (~158 kB gzipped).
 
 ## Controls
 
@@ -91,7 +91,8 @@ Pads rumble when you're cut, killed, deflected or parried.
   and a broom. Corpses land on the merchandise. (Swings sweep *over*
   furniture — only bodies collide.) The cardboard standee is the exception:
   touch it and it goes down, and stays down until the next round. Nobody
-  ever respects the standee.
+  ever respects the standee. Throw someone through the shop window or into
+  the demo kiosk and it breaks — the shop is fixed before the next round.
 - **Tsubazeriai.** If your cut lands while his is already coming down the
   *same* line, the weapons meet and lock guard-to-guard. Hammer attack to
   push; whoever drives the meter to the end throws the other off balance
@@ -133,8 +134,9 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   cuts a display window and glass door into one wall (with the street
   outside, and the shop name on the glass); `clerk` places the shop
   assistant behind the counter. Both are scenery only — the door stays shut —
-  but the display window breaks when a corpse is flung into it or a fighter
-  is shoved through it out of a blade lock (fresh glass every round).
+  but the display window and the demo kiosk break when a corpse is flung
+  into them or a fighter is shoved into them out of a blade lock
+  (everything is repaired for the next round).
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
   pairs). New stage = new argument.
 

@@ -28,13 +28,15 @@ interface Particle { pos: THREE.Vector3; prev: THREE.Vector3; radius: number; }
 /**
  * A box that blocks like an obstacle until a particle hits it at
  * `breakSpeed` or faster — then `shatter` runs, `broken` goes true and
- * everything passes (a shop window). Shared by reference, so one break
- * opens it for every ragdoll.
+ * everything passes (a shop window). A `solid` one is also in the obstacle
+ * list and keeps blocking once broken (a smashed kiosk). Shared by
+ * reference, so one break counts for every ragdoll.
  */
 export interface Breakable {
   ob: Obstacle;
   broken: boolean;
   breakSpeed: number; // m/s
+  solid?: boolean;
   shatter(at: THREE.Vector3, vel: THREE.Vector3): void;
 }
 
@@ -122,17 +124,18 @@ export class Ragdoll {
           p.prev.x = p.pos.x - (p.pos.x - p.prev.x) * (1 - GROUND_FRICTION);
           p.prev.z = p.pos.z - (p.pos.z - p.prev.z) * (1 - GROUND_FRICTION);
         }
-        for (const ob of this.obstacles) this.collide(p, ob);
+        // breakables first: an obstacle pushout would eat the impact speed
         for (const b of this.breakables) {
           if (b.broken || !this.collide(p, b.ob, true)) continue;
           const vel = p.pos.clone().sub(p.prev).divideScalar(H);
           if (vel.length() >= b.breakSpeed) {
             b.shatter(p.pos, vel);
-            p.prev.lerp(p.pos, BREAK_DRAG); // straight through, a little slower
-          } else {
+            if (!b.solid) p.prev.lerp(p.pos, BREAK_DRAG); // straight through, a little slower
+          } else if (!b.solid) {
             this.collide(p, b.ob);
           }
         }
+        for (const ob of this.obstacles) this.collide(p, ob);
       }
     }
   }

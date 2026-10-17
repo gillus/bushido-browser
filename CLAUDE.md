@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~155 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~158 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -128,7 +128,7 @@ Each future stage = a location + a dumb argument that went too far.
   them off the spawn corridor x≈0, z∈[-3,3]); `knockable: true` on a solid
   prop makes it cardboard — topples on touch, back up next round; non-solid
   props are pure set dressing.
-  **Fixtures (2026-10-17, `fixtures.ts`):** a prop with `"fixture":
+  **Fixtures (2026-10-17, `fixtures.ts`, `kiosk.ts`):** a prop with `"fixture":
   "shelf" | "kiosk"` keeps its box as the collider but renders as shop
   furniture built inside it — front = local +z, so a +z-wall shelf has
   `rot: 180`, -x wall `90`, +x wall `-90`. Shelves take `label` (lit
@@ -138,7 +138,7 @@ Each future stage = a location + a dumb argument that went too far.
   the prop's position (same shelves every load); all boxes of one fixture
   merge into a single vertex-coloured mesh (`BoxBatch`) — one draw call
   per shelf. The kiosk is a demo unit (tethered pad, CRT running a canvas
-  attract-mode loop at 12 fps, ticked from `updateCamera`). Solid props
+  attract-mode loop at 12 fps) and is breakable — see below. Solid props
   ≥ 1.5 m tall flush to a wall hide once the camera is within 0.3 m of
   their front (`wallDecor` limits in `scene.ts`), so wall shelving never
   blocks the shot from behind. AI-vs-AI is unchanged by the wall shelving
@@ -158,9 +158,17 @@ Each future stage = a location + a dumb argument that went too far.
   ~8 s via `updateCamera`). AI-vs-AI duels never get past z≈-3, so props
   along the -z wall don't move AI balance (2026-10-17: identical 20-seed
   results before/after moving the counter) — only humans go there.
-  **Breakable window (2026-10-17, `shopWindow.ts`):** each pane between
-  mullions is a `Breakable` (`ragdoll.ts`): a slab just outside the glass
-  that ragdoll particles test after the solid obstacles. A particle hitting
+  **Breakables (2026-10-17):** set dressing that breaks is a `Smashable`
+  (`debris.ts`: its `breakables` go to every ragdoll, main ticks
+  `update(sim, dt)` and plays a sound per returned `Smash` kind). Shared
+  bits live in `debris.ts`: `Debris` (flung pieces landing flat),
+  `RoundWatch` (reset on a new round), shard geometry/material. Ragdolls
+  test `Breakable`s BEFORE the obstacles — an obstacle pushout would eat
+  the impact speed. The two triggers are the same everywhere: a corpse
+  particle at ≥ `breakSpeed`, or a fighter OVERPOWERED out of a blade lock
+  (`stagger` with `dashLeft > 0`) sliding into it.
+  *Window* (`shopWindow.ts`): each pane between
+  mullions is a `Breakable` (`ragdoll.ts`): a slab just outside the glass. A particle hitting
   it at ≥ `BREAK_SPEED` (1.5 m/s) shatters the pane and loses `BREAK_DRAG`
   of its velocity; slower ones are pushed out like a wall. A living fighter
   OVERPOWERED out of a blade lock (`stagger` with `dashLeft > 0`) into the
@@ -171,6 +179,14 @@ Each future stage = a location + a dumb argument that went too far.
   sill through a broken pane but never leave the shop. All render-only
   (uses `Math.random` freely — never in the sim); the fighter clamp is
   unchanged and everything resets when a new round starts.
+  *Kiosk* (`kiosk.ts`, `BREAK_SPEED` 2 m/s): a `solid` Breakable — its
+  box is also a normal obstacle and keeps blocking once broken. The CRT
+  implodes (flash, picture folds to a dot, hole + cracks drawn on the
+  screen canvas, static on each later spark pop), face glass and sparks
+  spray out, the topper sign falls off and lands flat, and the cabinet
+  rocks along the blow. It deliberately never topples: the sim collider
+  stays upright, so a toppled render would leave fighters bumping into
+  air and corpses leaning on nothing. `Sfx.crt` / `Sfx.spark`.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown by
   `main.ts` on round start.
 - `src/render/poses.ts` — joint Euler targets per stance/move phase.

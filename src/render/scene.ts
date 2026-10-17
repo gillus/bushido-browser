@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { FighterState, SimState, StageDef, WallSide } from '../sim/types';
 import { Clerk } from './clerk';
-import { buildFixture } from './fixtures';
-import { ShopWindow } from './shopWindow';
+import { Smashable } from './debris';
+import { buildShelf } from './fixtures';
+import { Kiosk } from './kiosk';
 import { buildStorefront, holedWallGeo, storefrontHoles, wallAngle } from './storefront';
 
 export interface SceneBundle {
@@ -11,7 +12,7 @@ export interface SceneBundle {
   renderer: THREE.WebGLRenderer;
   updateCamera: (a: FighterState, b: FighterState, dt: number) => void;
   updateProps: (sim: SimState) => void;
-  shopWindow: ShopWindow | null; // breakable display window, if the stage has a storefront
+  smashables: Smashable[]; // set dressing that breaks: the shop window, demo kiosks
 }
 
 function ringLine(radius: number, y: number, color: string): THREE.LineLoop {
@@ -171,27 +172,27 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
   const wallDecor: Hugger[][] = [[], [], [], []];
   const DECOR_INDEX: Record<WallSide, number> = { '+z': 0, '-z': 1, '+x': 2, '-x': 3 };
   const sf = stage.walls?.storefront;
-  let shopWindow: ShopWindow | null = null;
+  const smashables: Smashable[] = [];
   if (sf) {
     // window frames, glass and the whole street go when their wall culls
     const front = buildStorefront(sf, stage.walls!);
     scene.add(front.group);
     wallDecor[DECOR_INDEX[sf.wall]].push({ obj: front.group, limit: stage.walls!.halfSize });
-    shopWindow = front.shopWindow;
+    smashables.push(front.shopWindow);
   }
   const clerk = stage.clerk ? new Clerk(stage.clerk) : null;
   if (clerk) scene.add(clerk.root);
-  const animated: ((dt: number) => void)[] = [];
   const box = new THREE.Box3();
   let solidIndex = 0;
   for (const p of stage.props ?? []) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(p.size[0], p.size[1], p.size[2]));
     mesh.position.set(p.pos[0], p.pos[1] + p.size[1] / 2, p.pos[2]);
     if (p.rot) mesh.rotation.y = (p.rot * Math.PI) / 180;
-    const fixture = buildFixture(p);
+    const kiosk = p.fixture === 'kiosk' ? new Kiosk(p) : null;
+    if (kiosk) smashables.push(kiosk);
+    const fixture = kiosk?.object ?? (p.fixture === 'shelf' ? buildShelf(p) : null);
     if (fixture) {
-      scene.add(fixture.object);
-      if (fixture.update) animated.push(fixture.update);
+      scene.add(fixture);
     } else {
       const mat = new THREE.MeshLambertMaterial({ color: p.color });
       if (p.emissive) mat.emissive = new THREE.Color(p.emissive);
@@ -213,7 +214,7 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
       if (wall >= 0) {
         // room-side face, measured out along the wall's normal
         const face = [box.min.z, -box.max.z, box.min.x, -box.max.x][wall];
-        wallDecor[wall].push({ obj: fixture?.object ?? mesh, limit: tall ? face - 0.3 : h });
+        wallDecor[wall].push({ obj: fixture ?? mesh, limit: tall ? face - 0.3 : h });
       }
     }
     if (p.solid) {
@@ -304,7 +305,6 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
     rim.position.set(camTarget.x - perp.x * 6, 4.5, camTarget.z - perp.z * 6);
     rim.target.position.copy(camTarget);
     clerk?.update(dt, camTarget);
-    for (const tick of animated) tick(dt);
     if (stage.walls) {
       // a wall culls once the camera is behind it; take its decor along
       const c = camera.position;
@@ -313,5 +313,5 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
     }
   };
 
-  return { scene, camera, renderer, updateCamera, updateProps, shopWindow };
+  return { scene, camera, renderer, updateCamera, updateProps, smashables };
 }

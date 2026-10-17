@@ -1,25 +1,17 @@
 import * as THREE from 'three';
 import { BODY_RADIUS } from '../sim/sim';
 import { SimState, StageStorefront } from '../sim/types';
+import { Debris, RoundWatch, Smash, Smashable, shardGeo, shardMat } from './debris';
 import { Breakable } from './ragdoll';
 
 const BREAK_SPEED = 1.5;   // m/s a corpse must hit a pane at
 const SHOVE_SPEED = 4;     // a shoved fighter's slide, for the shard spray
 const SHARDS_PER_M2 = 12;
-const GRAVITY = 9.8;
 const UP = new THREE.Vector3(0, 1, 0);
 
 interface Pane extends Breakable {
   x0: number; x1: number; // wall-local span between mullions
   mesh: THREE.Mesh;
-}
-
-interface Shard {
-  mesh: THREE.Object3D;
-  vel: THREE.Vector3;
-  spin: THREE.Vector3;
-  resting: boolean;
-  lie: number; // height of its centre when lying flat
 }
 
 /** A game box from the window display, and where it stood. */
@@ -39,17 +31,14 @@ interface Display {
  * the frame, and the glazier has it all back for the next round.
  * Render-only, like the ragdolls: the sim's arena is unchanged.
  */
-export class ShopWindow {
+export class ShopWindow implements Smashable {
   readonly panes: Pane[] = [];
-  private shards: Shard[] = [];
-  private debris = new THREE.Group(); // shards + teeth, wall-local
-  private shardMat = new THREE.MeshBasicMaterial({
-    color: '#e2f1fb', transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false,
-  });
+  readonly breakables: Breakable[] = this.panes;
+  // shards + teeth, wall-local: shop floor, pavement, or down in the road past the kerb
+  private debris = new Debris((_x, z) => (z > 0 ? 0.004 : z > -3.0 ? -0.026 : -0.196));
   private display: Display[] = [];
-  private broke: THREE.Vector3[] = [];
-  private wasEnded = false;
-  private lastFrame = 0;
+  private broke: Smash[] = [];
+  private round = new RoundWatch();
   private sill: number;
   private head: number;
 
@@ -58,7 +47,7 @@ export class ShopWindow {
     const [wx0, wx1, sill, head] = sf.window;
     this.sill = sill;
     this.head = head;
-    group.add(this.debris);
+    group.add(this.debris.group);
     group.updateMatrixWorld(true);
     group.traverse((o) => {
       if (o.userData.display === undefined) return;
@@ -94,13 +83,10 @@ export class ShopWindow {
 
   /**
    * Per render frame: shove impacts, shard physics, and the reset when a
-   * new round starts. Returns world points of panes broken since last call.
+   * new round starts. Returns the panes broken since the last call.
    */
-  update(sim: SimState, dt: number): THREE.Vector3[] {
-    const ended = sim.roundPhase === 'end';
-    if ((this.wasEnded && !ended) || sim.frame < this.lastFrame) this.reset();
-    this.wasEnded = ended;
-    this.lastFrame = sim.frame;
+  update(sim: SimState, dt: number): Smash[] {
+    if (this.round.newRound(sim)) this.reset();
 
     for (const f of sim.fighters) {
       // the OVERPOWERED slide is the only stagger that carries a dash
@@ -115,22 +101,7 @@ export class ShopWindow {
       pane.shatter(at, new THREE.Vector3(f.dashVec.x, 0, f.dashVec.z).multiplyScalar(SHOVE_SPEED));
     }
 
-    for (const s of this.shards) {
-      if (s.resting) continue;
-      s.vel.y -= GRAVITY * dt;
-      s.mesh.position.addScaledVector(s.vel, dt);
-      s.mesh.rotation.x += s.spin.x * dt;
-      s.mesh.rotation.y += s.spin.y * dt;
-      s.mesh.rotation.z += s.spin.z * dt;
-      const z = s.mesh.position.z;
-      // shop floor, pavement, or down in the road past the kerb
-      const ground = (z > 0 ? 0.004 : z > -3.0 ? -0.026 : -0.196) + s.lie;
-      if (s.mesh.position.y <= ground) {
-        s.mesh.position.y = ground;
-        s.mesh.rotation.set(-Math.PI / 2, 0, Math.random() * Math.PI * 2);
-        s.resting = true;
-      }
-    }
+    this.debris.update(dt);
 
     const out = this.broke;
     this.broke = [];
@@ -141,7 +112,7 @@ export class ShopWindow {
     if (pane.broken) return;
     pane.broken = true;
     pane.mesh.visible = false;
-    this.broke.push(at.clone());
+    this.broke.push({ at: at.clone(), kind: 'glass' });
     const push = vel.clone().applyAxisAngle(UP, -this.group.rotation.y); // wall-local
     const hit = this.group.worldToLocal(at.clone());
     const w = pane.x1 - pane.x0, h = this.head - this.sill;
@@ -153,16 +124,13 @@ export class ShopWindow {
       vel.x += (Math.random() - 0.5) * 1.2;
       vel.y += Math.random() * 1.2;
       vel.z += (Math.random() - 0.5) * 0.8;
-      const spin = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)
-        .multiplyScalar(spinRate);
-      this.shards.push({ mesh, vel, spin, resting: false, lie });
+      this.debris.fling(mesh, vel, spinRate, lie);
     };
     for (let i = 0; i < count; i++) {
       const size = 0.07 + Math.random() * 0.16;
-      const mesh = new THREE.Mesh(this.triangle(size), this.shardMat);
+      const mesh = new THREE.Mesh(shardGeo(size), shardMat);
       mesh.position.set(pane.x0 + Math.random() * w, this.sill + Math.random() * h, -0.03);
       mesh.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
-      this.debris.add(mesh);
       fling(mesh, 0, 18);
     }
     // the window display behind that pane goes with it
@@ -187,23 +155,10 @@ export class ShopWindow {
         pts = [side, y, 0, side, y + base, 0, side + tip, y + Math.random() * base, 0];
       }
       geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-      const tooth = new THREE.Mesh(geo, this.shardMat);
+      const tooth = new THREE.Mesh(geo, shardMat);
       tooth.position.z = -0.03;
-      this.debris.add(tooth);
+      this.debris.group.add(tooth);
     }
-  }
-
-  private triangle(size: number): THREE.BufferGeometry {
-    const g = new THREE.BufferGeometry();
-    const a = Math.random() * Math.PI * 2;
-    const pts: number[] = [];
-    for (let k = 0; k < 3; k++) {
-      const t = a + (k * Math.PI * 2) / 3 + (Math.random() - 0.5) * 1.2;
-      const r = size * (0.5 + Math.random() * 0.6);
-      pts.push(Math.cos(t) * r, Math.sin(t) * r, 0);
-    }
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    return g;
   }
 
   /** Fresh glass for the new round. */
@@ -212,9 +167,7 @@ export class ShopWindow {
       p.broken = false;
       p.mesh.visible = true;
     }
-    for (const o of this.debris.children) (o as THREE.Mesh).geometry.dispose();
     this.debris.clear();
-    this.shards = [];
     for (const d of this.display) {
       d.mesh.position.copy(d.home);
       d.mesh.rotation.copy(d.rot);
