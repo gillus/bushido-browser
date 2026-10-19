@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { Obstacle } from '../sim/types';
 
 /**
- * Keeps a carried weapon out of furniture, walls, floor and ceiling —
- * render only, the sim never sees it (its blade is the reach/arc wedge).
+ * Keeps a carried weapon out of furniture, walls, floor, ceiling and the
+ * opponent's body — render only, the sim never sees it (its blade is the
+ * reach/arc wedge).
  * The weapon is a capsule of radius `r` along a line through the grip,
  * from `back` behind the hand to `fwd` ahead of it; when the posed weapon
  * goes into something, `BladeAvoider.solve` finds the smallest turn about
@@ -14,6 +15,7 @@ export interface BladeShape { back: number; fwd: number; r: number; }
 
 export interface BladeWorld {
   boxes: Obstacle[];
+  bodies: Obstacle[]; // boxes around posed body parts: already loose round limbs, so no `r` margin
   floor: number;   // lowest the weapon line may go (a broom's bristles touch down)
   ceiling: number; // Infinity without a room
 }
@@ -49,16 +51,20 @@ export function clipLength(h: THREE.Vector3, d: THREE.Vector3, shape: BladeShape
   t0 = -back; t1 = fwd;
   slab(h.y, d.y, world.ceiling - r, Infinity);
   if (t1 > t0) len += t1 - t0;
-  for (const ob of world.boxes) {
-    // into the box's local frame (yaw only, as `collide` in sim.ts)
-    const px = h.x - ob.x, pz = h.z - ob.z;
-    t0 = -back; t1 = fwd;
-    slab(px * ob.c - pz * ob.s, d.x * ob.c - d.z * ob.s, -ob.halfW - r, ob.halfW + r);
-    slab(px * ob.s + pz * ob.c, d.x * ob.s + d.z * ob.c, -ob.halfD - r, ob.halfD + r);
-    slab(h.y, d.y, ob.y0 - r, ob.y1 + r);
-    if (t1 > t0) len += t1 - t0;
-  }
+  for (const ob of world.boxes) len += boxSpan(h, d, back, fwd, ob, r);
+  for (const ob of world.bodies) len += boxSpan(h, d, back, fwd, ob, 0);
   return len;
+}
+
+/** Length of the line h + t·d, t ∈ [-back, fwd], inside `ob` grown by `pad`. */
+function boxSpan(h: THREE.Vector3, d: THREE.Vector3, back: number, fwd: number, ob: Obstacle, pad: number): number {
+  // into the box's local frame (yaw only, as `collide` in sim.ts)
+  const px = h.x - ob.x, pz = h.z - ob.z;
+  t0 = -back; t1 = fwd;
+  slab(px * ob.c - pz * ob.s, d.x * ob.c - d.z * ob.s, -ob.halfW - pad, ob.halfW + pad);
+  slab(px * ob.s + pz * ob.c, d.x * ob.s + d.z * ob.c, -ob.halfD - pad, ob.halfD + pad);
+  slab(h.y, d.y, ob.y0 - pad, ob.y1 + pad);
+  return t1 > t0 ? t1 - t0 : 0;
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

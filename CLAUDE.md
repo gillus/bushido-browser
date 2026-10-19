@@ -48,11 +48,25 @@ Each future stage = a location + a dumb argument that went too far.
   weapon, raise preferred, the last direction kept unless another saves
   `SWITCH`; the hand itself inside a box → least length inside), eased in
   at `AVOID_IN` (or the pose rate if faster) and out at `AVOID_OUT`. The left arm swings
-  so its hand follows the haft (not mid-throw). Off in a blade lock;
-  cardboard is ignored during a cut (the cut knocks it flat). Render only
-  — hits are still the reach/arc wedge. Measured: random spots near
-  furniture facing the opponent, broom 50/400 poses clipping → 2 (a cut
-  through the standee, a hand inside the kiosk), tube 10 → 0.
+  so its hand follows the haft (not mid-throw). Cardboard is ignored
+  during a cut (the cut knocks it flat). Render only — hits are still the
+  reach/arc wedge. Measured: random spots near furniture facing the
+  opponent, broom 50/400 poses clipping → 2 (a cut through the standee, a
+  hand inside the kiosk), tube 10 → 0.
+  **The opponent's body too:** each view publishes `hull` — one box per
+  `BODY_SKINS` (hips, torso, head, thighs, shins; not the arms — the
+  blades cross in front of the hands in every guard) around its posed
+  meshes in its own yawed frame, dangling cloth left out — and its
+  `opponent` (set in main) avoids it as `BladeWorld.bodies`, with no `r`
+  margin (the boxes are already loose around round limbs; with it the
+  broom's butt grazed Panzer's head in the lock and swung the whole broom
+  flat). A landing cut stops at the skin. The lock is included: the tube
+  went through Sticchio's head there; now it passes in front of his face
+  and the blades still cross. Measured (both fighters face to face,
+  0.7–2.8 m, every phase vs five): tube 119/600 poses in the other body →
+  7, broom 127 → 37, all within 0.9 m and mostly the hand itself inside
+  (a turn about the hand can't help) — the sim only lets them that close
+  outside a lock 0.2% of AI-vs-AI time. Cost: ~0.06 ms a frame for both.
 - `src/main.ts` owns input edge-detection, the fixed-timestep accumulator
   loop, and the HUD. Sim ticks and render frames are decoupled. Keyboard and
   gamepad (`gamepad.ts`, polled once per render frame; pad edges accumulate

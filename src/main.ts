@@ -181,6 +181,8 @@ for (const v of views) {
   v.sidestepMove = rules.sidestep.move;
   v.ceiling = stage.walls?.height ?? Infinity;
 }
+views[0].opponent = views[1];
+views[1].opponent = views[0];
 scene.add(views[0].root, views[1].root);
 const carts = new CartView(
   [fighterChars[0].cart ?? '#222228', fighterChars[1].cart ?? '#222228'], rules.carts, stage.walls?.halfSize,

@@ -41,6 +41,9 @@ const SIDE_DIP = 0.08;
 const AVOID_IN = 16;
 const AVOID_OUT = 8;
 const FLOOR_SINK = 0.06;
+// The skins the opponent's weapon stays out of: not the arms — the blades
+// cross in front of the hands in every guard
+const BODY_SKINS: SkinName[] = ['hips', 'torso', 'head', 'hipR', 'kneeR', 'hipL', 'kneeL'];
 
 interface Dangler {
   node: THREE.Object3D;
@@ -505,17 +508,17 @@ export class FighterView {
   }
 
   /**
-   * Turn the weapon about the hand, out of any furniture, wall, floor or
-   * ceiling the pose put it into (bladeAvoid.ts). Render only: the sim's
-   * blade is the reach/arc wedge, and a cut into furniture already
-   * rebounds there. Not in a blade lock — the crossed blades are the point.
+   * Turn the weapon about the hand, out of any furniture, wall, floor,
+   * ceiling or opponent's body the pose put it into (bladeAvoid.ts).
+   * Render only: the sim's blade is the reach/arc wedge, and a cut into
+   * furniture already rebounds there.
    */
   private avoidBlade(f: FighterState, dt: number, rate: number): void {
     const wrist = this.joints.get('wristR')!;
     const goal = this.avoidGoal.identity();
     this.root.updateMatrixWorld(true);
     const hand = wrist.getWorldPosition(this.handPos);
-    if (f.armed && f.phase !== 'lock') {
+    if (f.armed) {
       const d = wrist.localToWorld(this.bladeDir.set(0, -1, 0)).sub(hand).normalize();
       const reach = Math.max(this.blade.back, this.blade.fwd) + this.blade.r;
       const boxes = this.bladeBoxes;
@@ -529,8 +532,9 @@ export class FighterView {
       }
       for (const b of this.breakables) if (!b.solid && !b.broken && near(b.ob)) boxes.push(b.ob);
       this.forward.set(Math.sin(this.facing), 0, Math.cos(this.facing));
+      // a landing cut stops at the skin instead of passing through
       this.avoider.solve(hand, d, this.forward, this.blade,
-        { boxes, floor: -FLOOR_SINK, ceiling: this.ceiling }, goal);
+        { boxes, bodies: this.opponent?.hull ?? [], floor: -FLOOR_SINK, ceiling: this.ceiling }, goal);
     }
     const out = goal.w > 0.99999;
     this.avoidQ.slerp(goal, 1 - Math.exp(-(out ? AVOID_OUT : Math.max(AVOID_IN, rate)) * dt));
@@ -545,6 +549,43 @@ export class FighterView {
     const grip = this.joints.get('elbowL')!.localToWorld(this.tmpT.set(0, -this.dims.foreLen, 0));
     const moved = this.bladeDir.copy(grip).sub(hand).applyQuaternion(this.avoidQ).add(hand).sub(s).normalize();
     this.turnJoint(sh, this.avoidGoal.setFromUnitVectors(grip.sub(s).normalize(), moved));
+  }
+
+  /**
+   * Refresh `hull`: each of `BODY_SKINS` as the box around its meshes in
+   * the fighter's own (yawed) frame — so it leans, steps and kneels with
+   * the pose. Dangling cloth is left out. Needs this frame's world matrices.
+   */
+  private updateHull(): void {
+    this.rootInv.copy(this.root.matrixWorld).invert();
+    const c = Math.cos(this.facing), s = Math.sin(this.facing);
+    const root = this.root.position;
+    const add = (o: THREE.Object3D): void => {
+      if (o.userData.dangle !== undefined) return;
+      if (o instanceof THREE.Mesh) {
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        this.meshToRoot.multiplyMatrices(this.rootInv, o.matrixWorld);
+        this.skinBox.union(this.meshBox.copy(o.geometry.boundingBox!).applyMatrix4(this.meshToRoot));
+      }
+      for (const ch of o.children) add(ch);
+    };
+    this.hull.length = 0;
+    BODY_SKINS.forEach((name, i) => {
+      this.skinBox.makeEmpty();
+      add(this.skins.get(name)!);
+      const { min, max } = this.skinBox;
+      const lx = (min.x + max.x) / 2, lz = (min.z + max.z) / 2;
+      const ob = this.bodyPool[i];
+      ob.x = root.x + lx * c + lz * s;
+      ob.z = root.z - lx * s + lz * c;
+      ob.halfW = (max.x - min.x) / 2;
+      ob.halfD = (max.z - min.z) / 2;
+      ob.y0 = min.y;
+      ob.y1 = max.y;
+      ob.c = c;
+      ob.s = s;
+      this.hull.push(ob);
+    });
   }
 
   /** Apply world rotation `q` to joint `j` (about its own pivot). */
@@ -704,6 +745,15 @@ export class FighterView {
   private handPos = new THREE.Vector3();
   private bladeDir = new THREE.Vector3();
   private forward = new THREE.Vector3();
+  /** The other fighter: its body is one more thing this weapon stays out of. */
+  opponent: FighterView | null = null;
+  /** This body as yawed boxes (one per `BODY_SKINS`, as posed last frame); empty once dead. */
+  hull: Obstacle[] = [];
+  private bodyPool: Obstacle[] = BODY_SKINS.map(() => ({ x: 0, z: 0, halfW: 0, halfD: 0, y0: 0, y1: 0, c: 1, s: 0 }));
+  private rootInv = new THREE.Matrix4();
+  private meshToRoot = new THREE.Matrix4();
+  private skinBox = new THREE.Box3();
+  private meshBox = new THREE.Box3();
 
   /** A copy of the weapon as carried (grip at the origin, along -Y), for throwing. */
   weaponClone(): THREE.Object3D {
@@ -735,6 +785,7 @@ export class FighterView {
     this.liveObstacles = liveObstacles ?? this.obstacles;
     this.time += dt;
     if (f.phase === 'dead') {
+      this.hull.length = 0;
       if (!this.ragdoll) {
         this.root.position.set(f.pos.x, 0, f.pos.z);
         this.spawnRagdoll(f);
@@ -855,6 +906,7 @@ export class FighterView {
     this.hipY += (targetHipY - this.hipY) * Math.min(1, 8 * dt);
     this.hips.position.y = this.hipY;
     this.avoidBlade(f, dt, target.rate);
+    this.updateHull();
     this.updateDanglers(dt);
 
     // blood tint on wounded limbs (idempotent; restores on round reset)
