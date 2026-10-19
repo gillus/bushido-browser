@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { Obstacle, SimState, StageProp } from '../sim/types';
-import { Debris, RoundWatch, Smash, Smashable, shardGeo, shardMat, shoved } from './debris';
+import { Debris, RoundWatch, Smash, Smashable, shardGeo, shardMat, shoved, struck } from './debris';
 import { Breakable } from './ragdoll';
 
 const BREAK_SPEED = 2.0;  // m/s a corpse must hit it at — sturdier than the window
 const SHOVE_SPEED = 4;    // a shoved fighter's slide, for the debris
+const CUT_SPEED = 3;      // a blade's blow, for the debris
+const SCREEN_DEPTH = 0.15; // impact this close to the front face = into the screen
 const FLOOR = -0.016;     // the shop floor (y = -0.02), plus a hair
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -18,7 +20,8 @@ interface Spark {
 /**
  * A solid prop with a CRT in it — the demo kiosk, the arcade cabinet — and
  * a `Breakable` that stays solid: a corpse flung into it at `BREAK_SPEED`,
- * or a fighter shoved into it out of a tsubazeriai, implodes the tube
+ * a fighter shoved into it out of a tsubazeriai, or a high/mid cut that
+ * rebounds off its front (where the screen is) implodes the tube
  * (flash, cracked dead screen, glass, sparks that keep popping), knocks the
  * `topper` sign off and sets the cabinet rocking. It never topples — the
  * sim's collider stays upright, so the corpse slumps against the wreck
@@ -48,6 +51,7 @@ export abstract class CrtCabinet implements Smashable {
   private round = new RoundWatch();
   private ob: Obstacle;
   private unit: Breakable;
+  private knocked = false; // a blade rebounded off the casing; once per blow
 
   constructor(p: StageProp, protected screen: CrtScreen) {
     const [w, h, d] = p.size;
@@ -85,6 +89,18 @@ export abstract class CrtCabinet implements Smashable {
 
     const shove = this.unit.broken ? null : shoved(sim, this.ob, SHOVE_SPEED);
     if (shove) this.smash(shove.vel);
+
+    // a blade bouncing off: through the screen if it came in at the front
+    // above the knees, otherwise a knock that sets the casing rocking
+    const cut = struck(sim, this.ob, CUT_SPEED);
+    if (cut && !this.knocked) {
+      this.knocked = true;
+      if (!this.unit.broken && cut.line !== 'low' && cut.local.z > this.ob.halfD - SCREEN_DEPTH) {
+        this.smash(cut.vel);
+      } else {
+        this.rock(cut.vel.clone().normalize(), 0.05);
+      }
+    } else if (!cut) this.knocked = false;
 
     this.debris.update(dt);
     if (this.rockAmp > 0) {
@@ -136,9 +152,7 @@ export abstract class CrtCabinet implements Smashable {
     const speed = dir.length();
     if (speed < 1e-3) dir.set(0, 0, -1).applyQuaternion(this.yaw);
     else dir.divideScalar(speed);
-    this.tipAxis.set(dir.z, 0, -dir.x); // up × dir: the top swings along the blow
-    this.rockAmp = THREE.MathUtils.clamp(speed * 0.035, 0.06, 0.2);
-    this.rockT = 0;
+    this.rock(dir, THREE.MathUtils.clamp(speed * 0.035, 0.06, 0.2));
 
     // the tube's face glass, out of the bezel and onto the floor
     const facing = new THREE.Vector3(0, 0, 1).applyQuaternion(this.glass.getWorldQuaternion(new THREE.Quaternion()));
@@ -165,6 +179,13 @@ export abstract class CrtCabinet implements Smashable {
     this.burst(28, 2.2);
     this.pops = 5;
     this.popIn = 0.3 + Math.random() * 0.5;
+  }
+
+  /** Tip the cabinet along `dir` (unit, horizontal) and let it rock back. */
+  private rock(dir: THREE.Vector3, amp: number): void {
+    this.tipAxis.set(dir.z, 0, -dir.x); // up × dir: the top swings along the blow
+    this.rockAmp = amp;
+    this.rockT = 0;
   }
 
   /** A spray of sparks from the dead tube. */
@@ -197,6 +218,7 @@ export abstract class CrtCabinet implements Smashable {
     this.sparks = [];
     this.pops = 0;
     this.rockAmp = 0;
+    this.knocked = false;
     this.body.quaternion.copy(this.yaw);
   }
 }

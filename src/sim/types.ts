@@ -243,7 +243,7 @@ export interface FighterState {
   walkCycle: number;      // accumulated distance, drives leg swing in the view
   wounds: Record<WoundRegion, boolean>;
   staggerLen: number;     // frames for the current stagger (parried = longer)
-  rebound: boolean;       // this attack's blade struck furniture or a wall (cleared on the next attack)
+  rebound: { x: number; z: number } | null; // where this attack's blade struck furniture or a wall (cleared on the next attack)
   score: number;
 }
 

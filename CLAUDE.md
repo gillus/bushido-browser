@@ -57,16 +57,18 @@ Each future stage = a location + a dumb argument that went too far.
   yaw-rotated box colliders (`obstaclesFromStage` in `types.ts`) passed via
   `SimConfig.obstacles`. The sim resolves fighter-circle-vs-box pushout in
   `collide()`; ragdoll particles collide with the same boxes (corpses drape
-  over furniture). **Furniture stops blades (2026-10-19, `bladeBlocked`
+  over furniture). **Furniture stops blades (2026-10-19, `bladeObstruction`
   in `sim.ts`):** the cut's centerline, from the hands (0.4 m) out to the
   opponent's body (or full reach on a whiff), is sampled every 0.1 m; a
   wall or a solid prop at least `BLADE_CLEARS[line]` tall (high 0.9 m,
   mid 1.05, low 0.5 — the thrust rides over the table and counter, the
   rising cut doesn't) rebounds the attacker into a 32f stagger
-  (`FighterState.rebound` → `rebound` event, its own knock+rattle sound).
+  (`FighterState.rebound` = the impact point → `rebound` event, its own
+  knock+rattle sound; a high/mid cut into a CRT cabinet's front smashes
+  the tube — `struck()` in `debris.ts`).
   Cardboard never stops a blade; the swing knocks it flat. Still
-  geometric — no mesh tests. The AI holds a cut that `bladeBlocked` says
-  would rebound and sidesteps instead (`holdBlockedCut`); AI-vs-AI is
+  geometric — no mesh tests. The AI holds a cut that `bladeObstruction`
+  says would rebound and sidesteps instead (`holdBlockedCut`); AI-vs-AI is
   bit-identical to before (20-seed × 12-min, 58.3% katana) since it never
   fights across furniture. The AI steers around furniture
   (`steerAroundFurniture` in `ai.ts`) — without it the broom AI backs into

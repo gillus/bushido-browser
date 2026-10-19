@@ -1,4 +1,4 @@
-import { bladeBlocked, CLASH_WINDUP_TAIL, dist, effWindup, PARRY_WINDOW, SimConfig } from './sim';
+import { bladeObstruction, CLASH_WINDUP_TAIL, dist, effWindup, PARRY_WINDOW, SimConfig } from './sim';
 import { EMPTY_INPUT, FighterState, InputFrame, Line, LINES, SimState } from './types';
 
 function mulberry32(seed: number): () => number {
@@ -54,7 +54,7 @@ export class AIController {
     const op = sim.fighters[1 - selfIndex];
     const move = cfg.moves[selfIndex][inp.stance ?? me.stance];
     const facing = Math.atan2(op.pos.x - me.pos.x, op.pos.z - me.pos.z);
-    if (!bladeBlocked(me, op, move, facing, cfg, sim)) return;
+    if (!bladeObstruction(me, op, move, facing, cfg, sim)) return;
     inp.attack = false;
     if (inp.moveX === 0) inp.moveX = this.circleDir;
   }

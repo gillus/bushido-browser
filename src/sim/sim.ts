@@ -79,7 +79,7 @@ function makeFighter(index: number): FighterState {
     walkCycle: 0,
     wounds: { arm: false, leg: false },
     staggerLen: STAGGER_FRAMES,
-    rebound: false,
+    rebound: null,
     score: 0,
   };
 }
@@ -158,7 +158,7 @@ function updateFighter(
         f.phase = 'windup';
         f.phaseFrame = 0;
         f.didHit = false;
-        f.rebound = false;
+        f.rebound = null;
         f.dashLeft = 0;
         break;
       }
@@ -402,14 +402,15 @@ function inBox(ob: Obstacle, x: number, z: number): boolean {
 }
 
 /**
- * Does `move`, cut from `f` along `facing`, run into a wall or solid
- * furniture before it reaches `o`? Pass `knock` to topple the cardboard
- * the blade passes through (only a real swing does that).
+ * Where `move`, cut from `f` along `facing`, runs into a wall or solid
+ * furniture before it reaches `o` — null if nothing's in the way. Pass
+ * `knock` to topple the cardboard the blade passes through (only a real
+ * swing does that).
  */
-export function bladeBlocked(
+export function bladeObstruction(
   f: FighterState, o: FighterState, move: MoveDef, facing: number,
   cfg: SimConfig, sim: SimState, knock?: boolean,
-): boolean {
+): { x: number; z: number } | null {
   const fx = Math.sin(facing), fz = Math.cos(facing);
   // the opponent in the swing ends it: the blade meets the body first
   const dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z;
@@ -421,7 +422,7 @@ export function bladeBlocked(
   for (let r = BLADE_FROM; r <= until; r += BLADE_STEP) {
     const x = f.pos.x + fx * r, z = f.pos.z + fz * r;
     if (cfg.arenaHalf !== undefined && (Math.abs(x) > cfg.arenaHalf || Math.abs(z) > cfg.arenaHalf)) {
-      return true;
+      return { x, z };
     }
     for (let i = 0; i < cfg.obstacles.length; i++) {
       const ob = cfg.obstacles[i];
@@ -431,10 +432,10 @@ export function bladeBlocked(
         if (knock) { st.down = true; st.fx = fx; st.fz = fz; st.downFrame = sim.frame; }
         continue;
       }
-      if (ob.y1 >= clears) return true;
+      if (ob.y1 >= clears) return { x, z };
     }
   }
-  return false;
+  return null;
 }
 
 /** Blades that hit furniture this frame bounce off it: no cut lands. */
@@ -442,9 +443,10 @@ function reboundOffFurniture(sim: SimState, cfg: SimConfig): void {
   for (let i = 0; i < 2; i++) {
     const f = sim.fighters[i];
     if (f.phase !== 'active' || f.didHit) continue;
-    if (!bladeBlocked(f, sim.fighters[1 - i], f.move!, f.facing, cfg, sim, true)) continue;
+    const stop = bladeObstruction(f, sim.fighters[1 - i], f.move!, f.facing, cfg, sim, true);
+    if (!stop) continue;
     f.didHit = true;
-    f.rebound = true;
+    f.rebound = stop;
     f.phase = 'stagger';
     f.phaseFrame = 0;
     f.staggerLen = REBOUND_STAGGER_FRAMES;

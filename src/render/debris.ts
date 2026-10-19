@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { BODY_RADIUS } from '../sim/sim';
-import { Obstacle, SimState } from '../sim/types';
+import { Line, Obstacle, SimState } from '../sim/types';
 import { Breakable } from './ragdoll';
 
 const GRAVITY = 9.8;
@@ -101,6 +101,33 @@ export interface Smash {
 export interface Smashable {
   readonly breakables: Breakable[];
   update(sim: SimState, dt: number): Smash[];
+}
+
+/**
+ * A blade that rebounded off `ob` (the sim's impact point lies in it):
+ * where it struck (floor level), which side of the box it came from in
+ * `ob`'s local frame (+z = front), and the blow as a velocity of `speed`
+ * along the cut. Null if no blade is stuck in it right now.
+ */
+export function struck(
+  sim: SimState, ob: Obstacle, speed: number,
+): { at: THREE.Vector3; vel: THREE.Vector3; local: { x: number; z: number }; line: Line } | null {
+  for (const f of sim.fighters) {
+    const hit = f.rebound;
+    if (f.phase !== 'stagger' || !hit || !f.move) continue;
+    const dx = hit.x - ob.x, dz = hit.z - ob.z;
+    const lx = dx * ob.c - dz * ob.s, lz = dx * ob.s + dz * ob.c;
+    if (Math.abs(lx) > ob.halfW + 1e-6 || Math.abs(lz) > ob.halfD + 1e-6) continue;
+    const vx = hit.x - f.pos.x, vz = hit.z - f.pos.z;
+    const len = Math.hypot(vx, vz) || 1;
+    return {
+      at: new THREE.Vector3(hit.x, 0, hit.z),
+      vel: new THREE.Vector3(vx / len, 0, vz / len).multiplyScalar(speed),
+      local: { x: lx, z: lz },
+      line: f.move.line,
+    };
+  }
+  return null;
 }
 
 /**
