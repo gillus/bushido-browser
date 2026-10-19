@@ -113,11 +113,13 @@ export const movePoses: Record<Line, MovePoseSet> = {
   },
 };
 
-// Leg wound: right knee down, left foot planted forward.
-// Merged over any pose (except death); pairs with a lowered pelvis in the view.
+// Leg wound: right knee on the floor under the hip, left thigh level with
+// the shin upright and the foot planted. Merged over any pose (except
+// death); pairs with KNEEL_HIP_Y in the view, which is what puts the knee
+// on the ground (thigh + kneecap ≈ shin + shoe).
 export const kneelLegs: Pose = {
-  hipR: [0.5, 0, 0.06], kneeR: [1.5, 0, 0],
-  hipL: [-1.05, 0, -0.06], kneeL: [1.35, 0, 0],
+  hipR: [0.15, 0, 0.06], kneeR: [1.45, 0, 0],
+  hipL: [-1.6, 0, -0.08], kneeL: [1.62, 0, 0],
 };
 
 // Active parry: blade snapped up vertical across the centerline

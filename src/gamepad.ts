@@ -121,6 +121,7 @@ export class GamepadInput {
       case 'shove': this.buzz(ev.who, 0.6, 0.4, 220); break;
       case 'parried': this.buzz(ev.who, 0.4, 0.8, 160); break;
       case 'deflect': this.buzz(ev.who, 0.2, 0.6, 110); break;
+      case 'rebound': this.buzz(ev.who, 0.5, 0.5, 140); break;
     }
   }
 

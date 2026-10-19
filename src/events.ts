@@ -10,6 +10,7 @@ export type GameEvent =
   | { type: 'swing'; who: number }                // windup -> active
   | { type: 'deflect'; who: number }              // `who` (attacker) bounced off a stance guard
   | { type: 'parried'; who: number }              // `who` (attacker) got actively parried
+  | { type: 'rebound'; who: number }              // `who`'s blade hit furniture or a wall
   | { type: 'parryTry'; who: number }
   | { type: 'clash' }                             // blades met: tsubazeriai
   | { type: 'push'; who: number }                 // `who` shoved the lock their way
@@ -80,6 +81,7 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
     const o = before.fighters[1 - i];
     if (f.phase !== b.phase) {
       if (b.phase === 'windup' && f.phase === 'active') out.push({ type: 'swing', who: i });
+      else if (f.phase === 'stagger' && f.rebound) out.push({ type: 'rebound', who: i });
       else if (f.phase === 'stagger' && b.phase !== 'lock') {
         out.push({ type: o.phase === 'parry' ? 'parried' : 'deflect', who: i });
       } else if (f.phase === 'parry') out.push({ type: 'parryTry', who: i });

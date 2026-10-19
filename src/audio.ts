@@ -109,6 +109,17 @@ export class Sfx {
         this.tone(out, t + 0.07, 'triangle', 300, 220, 0.14, 0.35);
         break;
       }
+      case 'rebound': {
+        // weapon into shop fittings: a dull knock, then the stock rattles
+        const out = v(ev.who);
+        this.tone(out, t, 'triangle', 190, 115, 0.14, 0.6);
+        this.noiseHit(out, t, 0.08, 'lowpass', 1300, 350, 0.7, 0.5);
+        for (let k = 0; k < 4; k++) {
+          this.noiseHit(out, t + 0.05 + k * 0.035 + Math.random() * 0.03, 0.025,
+            'bandpass', 2600 + Math.random() * 1400, 2200, 4, 0.12);
+        }
+        break;
+      }
       case 'clash': {
         // both weapons meet full force: two thocks on top of each other + crumple
         const out = this.voice((this.pans[0] + this.pans[1]) / 2);

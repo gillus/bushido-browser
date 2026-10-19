@@ -1,5 +1,5 @@
 import {
-  CharacterDef, EMPTY_INPUT, FighterState, InputFrame, MoveDef, MoveTable,
+  CharacterDef, EMPTY_INPUT, FighterState, InputFrame, Line, MoveDef, MoveTable,
   SimState, WoundRegion, Obstacle, ObstacleState,
 } from './types';
 
@@ -43,6 +43,18 @@ const LOCK_ARM_MULT = 0.8;        // a cut arm pushes weaker
 const LOCK_LEG_MULT = 0.85;       // so does a kneeling stance
 const SHOVE_STAGGER_FRAMES = 36;  // shorter than a deflect: a real but not free opening
 
+// Furniture stops blades: a cut whose line runs into a wall or a solid
+// prop before it reaches the opponent rebounds off it instead. Each line
+// clears furniture lower than this (m): the overhead cut comes down to the
+// waist, thrusts and sweeps ride at chest height over the counters, rising
+// cuts start at the shins. Cardboard (knockable) never stops a blade — it
+// gets knocked flat. Tested along the cut's centerline only (that's where
+// the rendered weapon goes), from the hands out.
+const BLADE_CLEARS: Record<Line, number> = { high: 0.9, mid: 1.05, low: 0.5 };
+const BLADE_FROM = 0.4;           // m from body center: the hands
+const BLADE_STEP = 0.1;
+const REBOUND_STAGGER_FRAMES = 32; // about a whiff's recovery, from a worse pose
+
 export interface SimConfig {
   arenaRadius: number;
   arenaHalf?: number;    // square arena half-extent (room walls); overrides arenaRadius
@@ -67,6 +79,7 @@ function makeFighter(index: number): FighterState {
     walkCycle: 0,
     wounds: { arm: false, leg: false },
     staggerLen: STAGGER_FRAMES,
+    rebound: false,
     score: 0,
   };
 }
@@ -145,6 +158,7 @@ function updateFighter(
         f.phase = 'windup';
         f.phaseFrame = 0;
         f.didHit = false;
+        f.rebound = false;
         f.dashLeft = 0;
         break;
       }
@@ -382,6 +396,61 @@ function updateLock(sim: SimState, cfg: SimConfig, inputs: [InputFrame, InputFra
   }
 }
 
+function inBox(ob: Obstacle, x: number, z: number): boolean {
+  const dx = x - ob.x, dz = z - ob.z;
+  return Math.abs(dx * ob.c - dz * ob.s) <= ob.halfW && Math.abs(dx * ob.s + dz * ob.c) <= ob.halfD;
+}
+
+/**
+ * Does `move`, cut from `f` along `facing`, run into a wall or solid
+ * furniture before it reaches `o`? Pass `knock` to topple the cardboard
+ * the blade passes through (only a real swing does that).
+ */
+export function bladeBlocked(
+  f: FighterState, o: FighterState, move: MoveDef, facing: number,
+  cfg: SimConfig, sim: SimState, knock?: boolean,
+): boolean {
+  const fx = Math.sin(facing), fz = Math.cos(facing);
+  // the opponent in the swing ends it: the blade meets the body first
+  const dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z;
+  const d = Math.hypot(dx, dz);
+  const halfArc = (move.arcDeg * Math.PI / 180) / 2;
+  const inArc = Math.abs(angleWrap(Math.atan2(dx, dz) - facing)) <= halfArc;
+  const until = inArc && d <= move.reach ? d - BODY_RADIUS : move.reach;
+  const clears = BLADE_CLEARS[move.line];
+  for (let r = BLADE_FROM; r <= until; r += BLADE_STEP) {
+    const x = f.pos.x + fx * r, z = f.pos.z + fz * r;
+    if (cfg.arenaHalf !== undefined && (Math.abs(x) > cfg.arenaHalf || Math.abs(z) > cfg.arenaHalf)) {
+      return true;
+    }
+    for (let i = 0; i < cfg.obstacles.length; i++) {
+      const ob = cfg.obstacles[i];
+      const st = sim.obstacleState[i];
+      if (st.down || !inBox(ob, x, z)) continue;
+      if (ob.knockable) {
+        if (knock) { st.down = true; st.fx = fx; st.fz = fz; st.downFrame = sim.frame; }
+        continue;
+      }
+      if (ob.y1 >= clears) return true;
+    }
+  }
+  return false;
+}
+
+/** Blades that hit furniture this frame bounce off it: no cut lands. */
+function reboundOffFurniture(sim: SimState, cfg: SimConfig): void {
+  for (let i = 0; i < 2; i++) {
+    const f = sim.fighters[i];
+    if (f.phase !== 'active' || f.didHit) continue;
+    if (!bladeBlocked(f, sim.fighters[1 - i], f.move!, f.facing, cfg, sim, true)) continue;
+    f.didHit = true;
+    f.rebound = true;
+    f.phase = 'stagger';
+    f.phaseFrame = 0;
+    f.staggerLen = REBOUND_STAGGER_FRAMES;
+  }
+}
+
 interface HitTest { hit: boolean; glancing: boolean; }
 
 /** Does attacker `f` reach opponent `o` this frame, and how cleanly? */
@@ -418,6 +487,7 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
 
   if (a.phase !== 'dead' && b.phase !== 'dead') separate(a, b, cfg, sim);
 
+  reboundOffFurniture(sim, cfg);
   if (tryClash(sim)) return;
 
   // Resolve blades. Collect first so a mutual hit is a true double kill.

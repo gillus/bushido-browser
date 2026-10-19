@@ -22,6 +22,12 @@ const DANGLE_DRAG = 0.09;    // tilt per m/s of travel
 const DANGLE_MAX_SPEED = 6;  // ignore teleports (round reset)
 const DOWN = new THREE.Vector3(0, -1, 0);
 
+// Footfalls land at the extremes of sin(walkCycle * STRIDE_FREQ) — events.ts
+// times the step sounds (and the kneeling knee-drag scuffs) off the same wave.
+const STRIDE_FREQ = 5.2;
+// Pelvis height kneeling on the cut leg, as a fraction of standing
+const KNEEL_HIP_Y = 0.585;
+
 interface Dangler {
   node: THREE.Object3D;
   stiff: number;
@@ -112,6 +118,8 @@ export class FighterView {
   private hipY: number;
   private facing = 0;
   private time = 0;
+  private lastWalk = 0;
+  private gait = 0; // 0 standing still .. 1 travelling: fades the knee-walk in and out
   private woundMats = {
     arm: [] as { mat: THREE.MeshLambertMaterial; orig: THREE.Color }[],
     leg: [] as { mat: THREE.MeshLambertMaterial; orig: THREE.Color }[],
@@ -648,21 +656,51 @@ export class FighterView {
       this.joints.get('torso')!.rotation.z += shake * 0.4;
     }
 
-    let targetHipY = kneeling ? this.baseHipY * 0.62 : this.baseHipY;
+    let targetHipY = kneeling ? this.baseHipY * KNEEL_HIP_Y : this.baseHipY;
     if (f.phase === 'idle') {
       // breathing: a slow chest rise so a held guard never looks frozen
       const breath = Math.sin(this.time * 2.1);
       this.joints.get('torso')!.rotation.x += breath * 0.018;
       this.joints.get('head')!.rotation.x -= breath * 0.012;
     }
+    // walkCycle only grows while travelling; a jump back is a round reset
+    const travelled = f.walkCycle - this.lastWalk;
+    this.lastWalk = f.walkCycle;
+    const moving = travelled > 0 && travelled < 0.5 && dt > 0
+      ? Math.min(1, travelled / dt / (this.char.walkSpeed * 0.3)) : 0;
+    this.gait += (moving - this.gait) * Math.min(1, 10 * dt);
+
+    this.hips.position.x = 0;
+    if (f.phase === 'idle' && kneeling && this.gait > 0.01) {
+      // knee-walk: the planted front foot reaches and stamps, then the
+      // weight rocks onto it and the cut leg's knee is hauled in behind
+      const ph = f.walkCycle * STRIDE_FREQ;
+      const s = Math.sin(ph), c = Math.cos(ph), g = this.gait;
+      const reach = Math.max(0, c); // front foot in the air
+      const haul = Math.max(0, -c); // knee dragging up
+      this.joints.get('hipL')!.rotation.x += (-reach * 0.3 + haul * 0.12) * g;
+      this.joints.get('kneeL')!.rotation.x += reach * 0.25 * g;
+      // the knee slides under the hip; the shin keeps its angle, so the
+      // foot trails along the floor instead of flicking up
+      this.joints.get('hipR')!.rotation.x += s * 0.22 * g;
+      this.joints.get('kneeR')!.rotation.x -= s * 0.22 * g;
+      const torso = this.joints.get('torso')!;
+      torso.rotation.x += haul * 0.12 * g;  // lean in to drag
+      torso.rotation.z += s * 0.09 * g;     // weight rolls side to side
+      torso.rotation.y += s * 0.06 * g;
+      this.joints.get('head')!.rotation.z -= s * 0.06 * g; // the head stays level-ish
+      this.hips.position.x = s * 0.025 * g;
+      targetHipY += haul * 0.04 * g;
+    }
+
     // walk: leg swing with a knee kick + slight bob layered over the stance
     if (f.phase === 'idle' && !kneeling) {
-      const swing = Math.sin(f.walkCycle * 5.2) * 0.4;
+      const swing = Math.sin(f.walkCycle * STRIDE_FREQ) * 0.4;
       this.joints.get('hipR')!.rotation.x += swing * 0.5;
       this.joints.get('hipL')!.rotation.x -= swing * 0.5;
       this.joints.get('kneeR')!.rotation.x += Math.max(0, swing) * 0.6;
       this.joints.get('kneeL')!.rotation.x += Math.max(0, -swing) * 0.6;
-      targetHipY += Math.abs(Math.sin(f.walkCycle * 5.2)) * 0.015;
+      targetHipY += Math.abs(Math.sin(f.walkCycle * STRIDE_FREQ)) * 0.015;
     }
     this.hipY += (targetHipY - this.hipY) * Math.min(1, 8 * dt);
     this.hips.position.y = this.hipY;
