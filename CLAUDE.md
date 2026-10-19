@@ -176,6 +176,28 @@ Each future stage = a location + a dumb argument that went too far.
   (the katana is rarely out of the broom's reach); most are blocked and
   the thrower dies unarmed — as intended for a last resort. Levels
   (6 min, vs normal): easy 28% / 32%, hard 72% / 52%.
+- Chained cuts / Renzoku-giri (2026-10-19, `rules.json` → `SimConfig.chain`,
+  optional — absent, 1374–983 and the hurl config's 1035–875 both still
+  bit-identical): in `'recovery'` after a WHIFF (`!didHit` — a landed,
+  deflected or parried cut never reaches recovery un-hit; chaining off a
+  wound would be a free kill on the flinch), a stance change + attack to a
+  line other than `move.line` sets `FighterState.chainQueued`; from
+  recovery frame `round(recovery × open)` it re-aims at the opponent and
+  goes straight to `'windup'` of the new line, `chain++` (max
+  `chain.max` follow-ups), `haste = windupMult`. `effWindup` applies
+  `haste` only while in `'windup'` (so the AI's hypothetical wind-ups for
+  idle cuts aren't scaled); a fresh idle cut resets `chain`/`haste`.
+  Events: `chain` (recovery → windup), a short whoosh + grip in `Sfx`;
+  the view winds up faster (rate 15) when `chain > 0`. AI (`chain` in
+  ai.json = odds per whiff, rolled once per recovery, only with
+  `cfg.chain`): `chainCut` keeps a chain ready through the recovery on
+  a line that isn't the idle opponent's guard, is in reach (past
+  `minReach`) and clears `bladeObstruction` — it fires when someone walks
+  in to punish. Measured (normal, 12 min, 60 seeds): 56.7% katana vs
+  55.3% without — ~1 SE, noise. The broom chains more (222 vs 131 per
+  240 min; chain kills 46 vs 14). Levels (6 min, vs normal): easy 26% /
+  30%, hard 72% / 48% (hard as broom −3 over 3 seed sets — chains punish
+  its patient punishing).
 - Combat resolution priority in `sim.ts`: furniture rebound → blade clash (below) → active
   parry (any line, 8-frame window) → passive stance guard (matching line,
   idle only) → glancing wound (outer reach/arc: high/mid → arm, low → leg;
@@ -347,8 +369,9 @@ Each future stage = a location + a dumb argument that went too far.
   see above). Faster pokes made hard WORSE — patience + parries is what
   wins. `throws` = [min, extra] frames between cartridge throws (only
   drawn when `cfg.carts` is set); `hurls` = the same for the weapon
-  throw, counting only while the AI is wounded (only with `cfg.hurl`). Smoke tests must pass a profile:
-  `new AIController(seed, aiJson.normal)` — and `carts`/`hurl`/`honor` from
+  throw, counting only while the AI is wounded (only with `cfg.hurl`);
+  `chain` = odds of chaining off a whiff (only with `cfg.chain`). Smoke tests must pass a profile:
+  `new AIController(seed, aiJson.normal)` — and `carts`/`hurl`/`chain`/`honor` from
   rules.json in the SimConfig to test the game as shipped.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
   on round start as PS1-RPG text windows (`dialogue.ts`, styles in

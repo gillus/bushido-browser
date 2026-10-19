@@ -17,6 +17,12 @@
     "pickupFrames": 22,
     "heights": { "high": 1.5, "mid": 1.1, "low": 0.4 }
   },
+  "chain": {
+    "name": "Renzoku-giri 連続斬り",
+    "open": 0.3,
+    "windupMult": 0.85,
+    "max": 2
+  },
   "honor": {
     "bowFrames": 72,
     "backDeg": 120

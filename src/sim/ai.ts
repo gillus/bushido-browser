@@ -31,6 +31,8 @@ export interface AIProfile {
   throws: [number, number];
   /** Frames, once wounded, before hurling the weapon as a last resort: [min, random extra]. */
   hurls: [number, number];
+  /** Odds of chaining a whiffed cut into another line (rolled once per whiff). */
+  chain: number;
 }
 
 /** A cartridge (or a hurled weapon) on its way: the line it flies on, frames until it lands. */
@@ -61,6 +63,7 @@ export class AIController {
   private cartPlanDone = false;
   private throwTimer: number;
   private hurlTimer: number;
+  private chainRoll: boolean | null = null; // this whiff's roll: will we chain off it? null = not rolled
 
   constructor(seed: number, private profile: AIProfile) {
     this.rng = mulberry32(seed);
@@ -127,6 +130,31 @@ export class AIController {
     inp.moveY = (wx * Math.sin(me.facing) + wz * Math.cos(me.facing)) / len;
     inp.moveX = (wx * Math.cos(me.facing) - wz * Math.sin(me.facing)) / len;
     inp.dash = len > 2.5;
+    return inp;
+  }
+
+  /**
+   * Our cut whiffed: maybe chain into another line — one they aren't
+   * guarding, that would reach them and clear the furniture. Keep it
+   * ready through the recovery: if they walk in to punish, it goes.
+   */
+  private chainCut(sim: SimState, cfg: SimConfig, selfIndex: number, inp: InputFrame): InputFrame {
+    const me = sim.fighters[selfIndex];
+    const op = sim.fighters[1 - selfIndex];
+    if (me.didHit || me.chain >= cfg.chain!.max || op.phase === 'dead') return inp;
+    if (this.chainRoll === null) this.chainRoll = this.rng() < this.profile.chain;
+    if (!this.chainRoll) return inp;
+    const d = dist(me, op);
+    const facing = Math.atan2(op.pos.x - me.pos.x, op.pos.z - me.pos.z);
+    const lines = LINES.filter((l) => {
+      const m = cfg.moves[selfIndex][l];
+      return l !== me.move!.line && !(op.phase === 'idle' && op.armed && op.stance === l)
+        && d < m.reach + m.lunge * 0.12 && d > (m.minReach ?? 0)
+        && !bladeObstruction(me, op, m, facing, cfg, sim);
+    });
+    if (lines.length === 0) return inp;
+    inp.stance = lines.includes(me.stance) ? me.stance : lines[0]; // stick with the first pick
+    inp.attack = true;
     return inp;
   }
 
@@ -282,6 +310,8 @@ export class AIController {
       if (op.phase !== 'bow' && dist(me, op) < 3.4) inp.stance = me.stance;
       return inp;
     }
+    if (me.phase === 'recovery' && cfg.chain) return this.chainCut(sim, cfg, selfIndex, inp);
+    this.chainRoll = null;
     if (me.phase !== 'idle') return inp; // committed; inputs would be dropped anyway
     if (!me.armed) return this.retrieve(sim, cfg, selfIndex, inp);
 

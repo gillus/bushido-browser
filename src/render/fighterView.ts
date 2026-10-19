@@ -589,7 +589,8 @@ export class FighterView {
 
   private targetFor(f: FighterState): { pose: Pose; rate: number } {
     switch (f.phase) {
-      case 'windup':   return { pose: movePoses[f.move!.line].windup, rate: 9 };
+      // a chained cut has less time to wind up: snap into it
+      case 'windup':   return { pose: movePoses[f.move!.line].windup, rate: f.chain > 0 ? 15 : 9 };
       case 'active':   return { pose: movePoses[f.move!.line].active, rate: 34 };
       case 'recovery': return { pose: movePoses[f.move!.line].recovery, rate: 5 };
       case 'parry':    return { pose: parryPose, rate: 30 };

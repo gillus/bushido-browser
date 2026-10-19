@@ -273,6 +273,20 @@ export interface HonorRules {
   backDeg: number;
 }
 
+/**
+ * Chained cuts (`rules.json` → `chain`): after a cut that whiffs, pick a
+ * different line and attack during the recovery — once `open` of it has
+ * passed — and the next cut starts there, re-aimed, its wind-up scaled by
+ * `windupMult`. Up to `max` follow-ups. A cut that landed (or was
+ * deflected) never chains: off a wound it would be a guaranteed kill.
+ */
+export interface ChainRules {
+  name: string;
+  open: number;
+  windupMult: number;
+  max: number;
+}
+
 export type CartEnd = 'hit' | 'guard' | 'parry' | 'wall' | 'prop' | 'spent';
 
 /** A cartridge — or a hurled weapon — in flight (or, once `end` is set, where it stopped). */
@@ -309,6 +323,9 @@ export interface FighterState {
   dishonored: boolean;    // broke the honor code this round: a kill won't score
   armed: boolean;         // false once the weapon is thrown, until it's picked up
   weaponAt: { x: number; z: number } | null; // where the thrown weapon lies (null: in hand or in the air)
+  chain: number;          // follow-ups chained in the current string (0 = a fresh cut)
+  chainQueued: boolean;   // attack pressed in recovery on a new line, before the chain window opened
+  haste: number;          // wind-up multiplier of the current cut (chained cuts are quicker)
 }
 
 export type RoundPhase = 'fight' | 'end';

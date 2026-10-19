@@ -244,6 +244,11 @@ export class Sfx {
         }
         break;
       }
+      case 'chain':
+        // the weapon wrenched round mid-recovery: a short drag of air and a squeak of grip
+        this.whoosh(v(ev.who), t, 0.09, 600, 1300, 0.18);
+        this.noiseHit(v(ev.who), t, 0.05, 'bandpass', 2600, 2000, 2, 0.1);
+        break;
       case 'pickup':
         // back in hand: the grip scraped up off the floor and squeezed
         this.noiseHit(v(ev.who), t, 0.1, 'bandpass', 1400, 2200, 1.5, 0.12);

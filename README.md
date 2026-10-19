@@ -92,6 +92,14 @@ Pads rumble when you're cut, killed, deflected or parried.
   wound the **leg** (kneeling: half speed, no dash, weaker lunge). Getting
   wounded flinches you, cancelling whatever you were doing. A second graze to
   an already-wounded region kills. Wounds last until the round ends.
+- **Renzoku-giri 連続斬り: chained cuts.** Whiff, and you can chain
+  out of the recovery into a *different* line: change stance and press
+  attack during the follow-through (it goes about a third of the way in;
+  press earlier in the follow-through and it waits for that). The re-aimed second cut
+  winds up ~15% quicker — a Jodan that missed becomes a Chudan thrust at
+  whoever stepped in to punish it. Up to two follow-ups, and only off a
+  clean miss: a cut that landed, was deflected or was parried can't chain.
+  Guards and parries still stop it like any other cut.
 - Dashing has no invincibility — it saves you only if it actually carries you
   out of the weapon's reach.
 - **Weapons have a reach game.** The broom out-ranges the cardboard tube by
@@ -185,7 +193,9 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   (everything is repaired for the next round).
 - `rules.json` — the cartridge throw (`ammo`, `windup`, `recovery`,
   `speed`, flight `heights` per line), the weapon throw (`hurl`: the same
-  plus `pickupFrames`, the stoop to get it back) and the honor code (`bowFrames`, and
+  plus `pickupFrames`, the stoop to get it back), chained cuts (`chain`:
+  `open` = how far into a whiff's recovery the chain can start, `windupMult`,
+  `max` follow-ups) and the honor code (`bowFrames`, and
   `backDeg`: how far round behind someone a hit counts as "in the back").
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
   pairs), played out in RPG text boxes before each round. New stage = new

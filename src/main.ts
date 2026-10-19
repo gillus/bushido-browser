@@ -7,7 +7,7 @@ import rulesJson from './data/rules.json';
 import { AIController, AIProfile } from './sim/ai';
 import { createSim, MATCH_WINS, ROUND_END_FRAMES, SimConfig, stepSim, TICK } from './sim/sim';
 import {
-  CartRules, CharacterDef, EMPTY_INPUT, HonorRules, HurlRules, InputFrame, Line, SimState, StageDef, WeaponDef,
+  CartRules, ChainRules, CharacterDef, EMPTY_INPUT, HonorRules, HurlRules, InputFrame, Line, SimState, StageDef, WeaponDef,
   obstaclesFromStage,
 } from './sim/types';
 import { CartView } from './render/carts';
@@ -27,7 +27,7 @@ const characters = charactersJson as Record<string, CharacterDef>;
 const weapons = weaponsJson as unknown as Record<string, WeaponDef>;
 const stage = stageJson as unknown as StageDef;
 const BICKER = flavorJson.bicker as [string, string][];
-const rules = rulesJson as { carts: CartRules; hurl: HurlRules; honor: HonorRules };
+const rules = rulesJson as { carts: CartRules; hurl: HurlRules; chain: ChainRules; honor: HonorRules };
 
 const fighterChars: [CharacterDef, CharacterDef] = [characters.panzer, characters.sticchio];
 const fighterWeapons: [WeaponDef, WeaponDef] = [
@@ -48,6 +48,7 @@ const cfg: SimConfig = {
   lockLeverage: [fighterWeapons[0].lockLeverage ?? 1, fighterWeapons[1].lockLeverage ?? 1],
   carts: rules.carts,
   hurl: rules.hurl,
+  chain: rules.chain,
   honor: rules.honor,
 };
 
@@ -297,7 +298,7 @@ const REMATCH_DELAY = 0.8; // s the match banner is up before a press counts
 // events worth hearing again in the replay (no footsteps or stance clicks)
 const REPLAY_SOUNDS = new Set<GameEvent['type']>([
   'swing', 'parryTry', 'clash', 'push', 'shove', 'disengage', 'deflect', 'parried',
-  'wound', 'kill', 'rebound', 'dash', 'topple', 'throw', 'cart', 'dishonor', 'hurl', 'landed', 'pickup',
+  'wound', 'kill', 'rebound', 'dash', 'topple', 'throw', 'cart', 'dishonor', 'hurl', 'landed', 'pickup', 'chain',
 ]);
 let hitstop = 0;
 let matchUp = -1; // seconds the match banner has been showing; -1 = hidden

@@ -1,5 +1,5 @@
 import {
-  Cart, CartEnd, CartRules, CharacterDef, EMPTY_INPUT, FighterState, HonorRules, HurlRules, InputFrame, Line,
+  Cart, CartEnd, CartRules, ChainRules, CharacterDef, EMPTY_INPUT, FighterState, HonorRules, HurlRules, InputFrame, Line,
   MoveDef, MoveTable, SimState, WoundRegion, Obstacle, ObstacleState,
 } from './types';
 
@@ -83,6 +83,7 @@ export interface SimConfig {
   carts?: CartRules;   // rules.json; absent = nobody throws
   honor?: HonorRules;  // rules.json; absent = no bow, no dishonor
   hurl?: HurlRules;    // rules.json; absent = nobody throws their weapon
+  chain?: ChainRules;  // rules.json; absent = every cut recovers in full
 }
 
 function makeFighter(index: number, cfg: SimConfig): FighterState {
@@ -106,6 +107,9 @@ function makeFighter(index: number, cfg: SimConfig): FighterState {
     dishonored: false,
     armed: true,
     weaponAt: null,
+    chain: 0,
+    chainQueued: false,
+    haste: 1,
   };
 }
 
@@ -216,6 +220,8 @@ function updateFighter(
         f.didHit = false;
         f.rebound = null;
         f.dashLeft = 0;
+        f.chain = 0;
+        f.haste = 1;
         break;
       }
 
@@ -279,12 +285,35 @@ function updateFighter(
       const lunge = m.lunge * (f.wounds.leg ? LEG_LUNGE_MULT : 1);
       f.pos.x += fwd.x * lunge * TICK;
       f.pos.z += fwd.z * lunge * TICK;
-      if (++f.phaseFrame >= m.active) { f.phase = 'recovery'; f.phaseFrame = 0; }
+      if (++f.phaseFrame >= m.active) { f.phase = 'recovery'; f.phaseFrame = 0; f.chainQueued = false; }
       break;
     }
 
     case 'recovery': {
-      if (++f.phaseFrame >= f.move!.recovery) { f.phase = 'idle'; f.phaseFrame = 0; f.move = null; }
+      const chain = cfg.chain;
+      if (chain && !f.didHit && f.chain < chain.max) {
+        // a whiff: pick a new line and attack to chain into it
+        if (inp.stance) f.stance = inp.stance;
+        if (inp.attack && f.stance !== f.move!.line) f.chainQueued = true;
+        if (f.chainQueued && f.stance !== f.move!.line
+          && f.phaseFrame >= Math.round(f.move!.recovery * chain.open)) {
+          f.facing = Math.atan2(o.pos.x - f.pos.x, o.pos.z - f.pos.z); // re-aimed
+          f.move = moves[f.stance];
+          f.phase = 'windup';
+          f.phaseFrame = 0;
+          f.rebound = null;
+          f.chain++;
+          f.chainQueued = false;
+          f.haste = chain.windupMult;
+          break;
+        }
+      }
+      if (++f.phaseFrame >= f.move!.recovery) {
+        f.phase = 'idle';
+        f.phaseFrame = 0;
+        f.move = null;
+        f.chainQueued = false;
+      }
       break;
     }
 
@@ -407,8 +436,10 @@ function collide(f: FighterState, cfg: SimConfig, sim: SimState): void {
   }
 }
 
+/** Wind-up frames of `m` for `f` (a cut arm is slower; a chained cut, under way, quicker). */
 export function effWindup(f: FighterState, m: MoveDef): number {
-  return f.wounds.arm ? Math.round(m.windup * ARM_WINDUP_MULT) : m.windup;
+  const haste = f.phase === 'windup' ? f.haste : 1;
+  return Math.round(m.windup * (f.wounds.arm ? ARM_WINDUP_MULT : 1) * haste);
 }
 
 /** Keep bodies from overlapping. */
