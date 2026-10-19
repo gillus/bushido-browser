@@ -134,6 +134,7 @@ export class GamepadInput {
       case 'parried': this.buzz(ev.who, 0.4, 0.8, 160); break;
       case 'deflect': this.buzz(ev.who, 0.2, 0.6, 110); break;
       case 'rebound': this.buzz(ev.who, 0.5, 0.5, 140); break;
+      case 'slip': this.buzz(ev.who, 0.2, 0.4, 110); break; // thrusting into air
       case 'cart': if (ev.end === 'hit') this.buzz(ev.who, 0.3, 0.6, 120); break;
     }
   }

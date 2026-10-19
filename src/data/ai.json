@@ -9,7 +9,8 @@
     "throws": [420, 300],
     "hurls": [150, 300],
     "chain": 0.15,
-    "feint": 0.15
+    "feint": 0.15,
+    "sidestep": 0.1
   },
   "normal": {
     "label": "SENPAI 先輩",
@@ -21,7 +22,8 @@
     "throws": [240, 240],
     "hurls": [90, 240],
     "chain": 0.35,
-    "feint": 0.3
+    "feint": 0.3,
+    "sidestep": 0.3
   },
   "hard": {
     "label": "SENSEI 先生",
@@ -33,6 +35,7 @@
     "throws": [200, 200],
     "hurls": [60, 200],
     "chain": 0.5,
-    "feint": 0.5
+    "feint": 0.5,
+    "sidestep": 0.5
   }
 }

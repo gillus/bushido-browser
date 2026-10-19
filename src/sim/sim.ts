@@ -1,6 +1,6 @@
 import {
   Cart, CartEnd, CartRules, ChainRules, CharacterDef, EMPTY_INPUT, FeintRules, FighterState, HonorRules, HurlRules, InputFrame, Line,
-  MoveDef, MoveTable, SimState, WoundRegion, Obstacle, ObstacleState,
+  MoveDef, MoveTable, SidestepRules, SimState, WoundRegion, Obstacle, ObstacleState,
 } from './types';
 
 export const TICK = 1 / 60;
@@ -29,6 +29,7 @@ export const BODY_RADIUS = 0.34;
 const DASH_FRAMES = 10;
 const DASH_COOLDOWN = 28;
 const LUNGE_WINDUP_TAIL = 6; // lunge kicks in this many frames before active
+const SIDESTEP_STICK = 0.5;  // a dash counts as sideways past this much side, under this much forward/back
 
 // Tsubazeriai: a same-line cut that lands while the other blade is already
 // moving (active, or in its lunge tail) meets steel — well, cardboard —
@@ -85,6 +86,7 @@ export interface SimConfig {
   hurl?: HurlRules;    // rules.json; absent = nobody throws their weapon
   chain?: ChainRules;  // rules.json; absent = every cut recovers in full
   feint?: FeintRules;  // rules.json; absent = a cut once started goes through
+  sidestep?: SidestepRules; // rules.json; absent = a sideways dash is just a dash
 }
 
 function makeFighter(index: number, cfg: SimConfig): FighterState {
@@ -111,6 +113,7 @@ function makeFighter(index: number, cfg: SimConfig): FighterState {
     chain: 0,
     chainQueued: false,
     haste: 1,
+    overreach: false,
   };
 }
 
@@ -184,7 +187,7 @@ function updateFighter(
   // Face the opponent while free; facing is locked once an attack starts
   // (a throw keeps aiming until the cartridge — or the weapon — leaves the hand).
   if (f.phase === 'idle' || f.phase === 'stagger' || f.phase === 'bow'
-    || f.phase === 'flinch' || f.phase === 'parry' || f.phase === 'feint'
+    || f.phase === 'flinch' || f.phase === 'parry' || f.phase === 'feint' || f.phase === 'sidestep'
     || (f.phase === 'throw' && f.phaseFrame < cfg.carts!.windup)
     || (f.phase === 'hurl' && f.phaseFrame < cfg.hurl!.windup)) {
     f.facing = Math.atan2(o.pos.x - f.pos.x, o.pos.z - f.pos.z);
@@ -223,6 +226,7 @@ function updateFighter(
         f.dashLeft = 0;
         f.chain = 0;
         f.haste = 1;
+        f.overreach = false;
         break;
       }
 
@@ -237,6 +241,18 @@ function updateFighter(
         f.phase = 'hurl';
         f.phaseFrame = 0;
         f.dashLeft = 0;
+        break;
+      }
+
+      if (inp.dash && f.dashCooldown <= 0 && !f.wounds.leg && cfg.sidestep
+        && Math.abs(inp.moveX) > SIDESTEP_STICK && Math.abs(inp.moveY) < SIDESTEP_STICK) {
+        // a dash to the side: step around them instead (the side is kept in dashVec)
+        const side = Math.sign(inp.moveX);
+        f.phase = 'sidestep';
+        f.phaseFrame = 0;
+        f.dashVec = { x: right.x * side, z: right.z * side };
+        f.dashLeft = 0;
+        f.dashCooldown = DASH_COOLDOWN;
         break;
       }
 
@@ -293,7 +309,16 @@ function updateFighter(
       const lunge = m.lunge * (f.wounds.leg ? LEG_LUNGE_MULT : 1);
       f.pos.x += fwd.x * lunge * TICK;
       f.pos.z += fwd.z * lunge * TICK;
-      if (++f.phaseFrame >= m.active) { f.phase = 'recovery'; f.phaseFrame = 0; f.chainQueued = false; }
+      if (++f.phaseFrame >= m.active) {
+        if (f.overreach) {
+          // carried past the sidestep: off balance instead of a recovery
+          f.overreach = false;
+          f.phase = 'stagger';
+          f.staggerLen = cfg.sidestep!.stagger;
+        } else f.phase = 'recovery';
+        f.phaseFrame = 0;
+        f.chainQueued = false;
+      }
       break;
     }
 
@@ -329,6 +354,24 @@ function updateFighter(
       // bringing the weapon back to guard: open, but free to pick the next line
       if (inp.stance) f.stance = inp.stance;
       if (++f.phaseFrame >= cfg.feint!.recovery) { f.phase = 'idle'; f.phaseFrame = 0; }
+      break;
+    }
+
+    case 'sidestep': {
+      // circling: along the tangent to them, on the side picked at the start
+      const rules = cfg.sidestep!;
+      if (f.phaseFrame < rules.move) {
+        const dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z;
+        const d = Math.hypot(dx, dz) || 1;
+        let tx = dz / d, tz = -dx / d;
+        if (tx * f.dashVec.x + tz * f.dashVec.z < 0) { tx = -tx; tz = -tz; }
+        f.dashVec = { x: tx, z: tz };
+        const step = rules.distance / rules.move;
+        f.pos.x += tx * step;
+        f.pos.z += tz * step;
+        f.walkCycle += step;
+      }
+      if (++f.phaseFrame >= rules.frames) { f.phase = 'idle'; f.phaseFrame = 0; }
       break;
     }
 
@@ -761,6 +804,21 @@ function updateCarts(sim: SimState, cfg: SimConfig, strike: boolean): void {
   if (kills[0] || kills[1]) endRound(sim, cfg, kills);
 }
 
+/**
+ * Does `f`'s thrust go past `o`'s sidestep? It must arrive while the step
+ * is under way, aimed at them — where they are, or where they stood when
+ * they stepped (a step that already took them out of its line counts:
+ * the thrust still overreaches through the space they left).
+ */
+function slips(f: FighterState, o: FighterState, cfg: SimConfig): boolean {
+  const rules = cfg.sidestep;
+  if (!rules || !f.move!.thrust || o.phase !== 'sidestep'
+    || o.phaseFrame < rules.evadeFrom || o.phaseFrame > rules.move) return false;
+  const back = (rules.distance / rules.move) * o.phaseFrame;
+  return testHitAt(f, o.pos.x, o.pos.z).hit
+    || testHitAt(f, o.pos.x - o.dashVec.x * back, o.pos.z - o.dashVec.z * back).hit;
+}
+
 /** A glancing wound: the limb is marked and whatever they were doing stops. */
 function wound(sim: SimState, cfg: SimConfig, i: number, region: WoundRegion): void {
   const f = sim.fighters[i];
@@ -804,9 +862,14 @@ interface HitTest { hit: boolean; glancing: boolean; }
 
 /** Does attacker `f` reach opponent `o` this frame, and how cleanly? */
 function testHit(f: FighterState, o: FighterState): HitTest {
+  return testHitAt(f, o.pos.x, o.pos.z);
+}
+
+/** Would attacker `f`'s cut reach a body standing at (x, z) this frame? */
+function testHitAt(f: FighterState, x: number, z: number): HitTest {
   const m = f.move!;
-  const dx = o.pos.x - f.pos.x;
-  const dz = o.pos.z - f.pos.z;
+  const dx = x - f.pos.x;
+  const dz = z - f.pos.z;
   const d = Math.hypot(dx, dz);
   const halfArc = (m.arcDeg * Math.PI / 180) / 2;
   const ang = Math.abs(angleWrap(Math.atan2(dx, dz) - f.facing));
@@ -848,10 +911,18 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
   const shamed: [boolean, boolean] = [false, false];
   let deflected = false;
   let parried = false;
+  let slipped = false;
   for (let i = 0; i < 2; i++) {
     const f = sim.fighters[i];
     const o = sim.fighters[1 - i];
     if (f.phase !== 'active' || f.didHit || o.phase === 'dead') continue;
+    if (slips(f, o, cfg)) {
+      // the thrust meets air: it runs on past the sidestep, hitting nothing
+      f.didHit = true;
+      f.overreach = true;
+      slipped = true;
+      continue;
+    }
     const res = testHit(f, o);
     if (!res.hit) continue;
     f.didHit = true;
@@ -886,7 +957,10 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
 
   for (let i = 0; i < 2; i++) if (shamed[i]) dishonor(sim, cfg, i);
 
-  if (parried && !kills[0] && !kills[1] && !wounds[0] && !wounds[1]) {
+  if (slipped && !kills[0] && !kills[1] && !wounds[0] && !wounds[1]) {
+    sim.message = cfg.sidestep!.name.toUpperCase();
+    sim.messageTimer = 50;
+  } else if (parried && !kills[0] && !kills[1] && !wounds[0] && !wounds[1]) {
     sim.message = 'PARRIED';
     sim.messageTimer = 55;
   } else if (deflected && !kills[0] && !kills[1] && !wounds[0] && !wounds[1]) {

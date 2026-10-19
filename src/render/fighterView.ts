@@ -30,6 +30,11 @@ const STRIDE_FREQ = 5.2;
 const KNEEL_HIP_Y = 0.585;
 // …and stooping for a dropped weapon
 const PICKUP_HIP_Y = 0.72;
+// Sidestep body language (radians at full step; the dip is a fraction of hip height)
+const SIDE_TURN = 0.45;
+const SIDE_LEAN = 0.16;
+const SIDE_SPLAY = 0.3;
+const SIDE_DIP = 0.08;
 
 interface Dangler {
   node: THREE.Object3D;
@@ -624,6 +629,9 @@ export class FighterView {
   hurlWindup = 20;
   /** Frames a feint takes to come back to guard (rules.json `feint.recovery`). */
   feintRecovery = 14;
+  /** Frames a sidestep travels for (rules.json `sidestep.move`). */
+  sidestepMove = 10;
+  private sideLean = 0; // -1 stepping left … 1 right, eased
 
   /** A copy of the weapon as carried (grip at the origin, along -Y), for throwing. */
   weaponClone(): THREE.Object3D {
@@ -707,7 +715,25 @@ export class FighterView {
       this.joints.get('torso')!.rotation.z += shake * 0.4;
     }
 
+    // sidestep (tai-sabaki): hips turned off the line, leaning into the
+    // step, the trailing leg crossing behind — layered over the guard
+    const side = f.phase === 'sidestep' && f.phaseFrame < this.sidestepMove
+      ? Math.sign(f.dashVec.x * Math.cos(f.facing) - f.dashVec.z * Math.sin(f.facing)) : 0;
+    this.sideLean += (side - this.sideLean) * Math.min(1, 18 * dt);
+    const sl = this.sideLean;
+    if (Math.abs(sl) > 0.01) {
+      const torso = this.joints.get('torso')!;
+      torso.rotation.y += sl * SIDE_TURN;
+      torso.rotation.z -= sl * SIDE_LEAN;
+      this.joints.get('head')!.rotation.y -= sl * SIDE_TURN * 0.8; // eyes stay on them
+      this.joints.get('hipR')!.rotation.z += sl * SIDE_SPLAY;
+      this.joints.get('hipL')!.rotation.z += sl * SIDE_SPLAY;
+      this.joints.get('kneeR')!.rotation.x += Math.abs(sl) * 0.35;
+      this.joints.get('kneeL')!.rotation.x += Math.abs(sl) * 0.35;
+    }
+
     let targetHipY = kneeling ? this.baseHipY * KNEEL_HIP_Y : this.baseHipY;
+    targetHipY *= 1 - Math.abs(sl) * SIDE_DIP;
     if (f.phase === 'pickup' && !kneeling) targetHipY *= PICKUP_HIP_Y;
     if (f.phase === 'idle') {
       // breathing: a slow chest rise so a held guard never looks frozen

@@ -258,6 +258,21 @@ export class Sfx {
         this.noiseHit(out, t + 0.03, 0.05, 'bandpass', 2400, 1800, 2, 0.08);
         break;
       }
+      case 'sidestep': {
+        // a sneaker pivoting on linoleum, and the shirt swishing round
+        const out = v(ev.who);
+        const f = 1100 + Math.random() * 300;
+        this.tone(out, t, 'triangle', f, f * 0.8, 0.13, 0.08, 0.01);
+        this.noiseHit(out, t + 0.01, 0.16, 'bandpass', 700, 1600, 1.2, 0.12);
+        break;
+      }
+      case 'slip': {
+        // the thrust hisses through where they were; the thruster skids on
+        const out = v(ev.who);
+        this.noiseHit(out, t, 0.14, 'bandpass', 3200, 900, 1.5, 0.22);
+        this.tone(out, t + 0.06, 'triangle', 1900, 1300, 0.16, 0.08, 0.01);
+        break;
+      }
       case 'pickup':
         // back in hand: the grip scraped up off the floor and squeezed
         this.noiseHit(v(ev.who), t, 0.1, 'bandpass', 1400, 2200, 1.5, 0.12);

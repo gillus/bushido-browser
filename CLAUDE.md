@@ -219,6 +219,37 @@ Each future stage = a location + a dumb argument that went too far.
   hard 76% / 62% — hard as broom +14: its quick reaction feints off
   guards. No AI-vs-AI kill ever lands mid-feint (the 14f recovery beats
   every wind-up); the risk is a cut already in flight.
+- Sidestep / Tai-sabaki (2026-10-19, `rules.json` → `SimConfig.sidestep`,
+  optional — absent, 1374–983, hurl 1035–875, chain 1079–831 and the feint
+  config's 1080–889 all still bit-identical): with the rule, a dash with
+  |moveX| > 0.5 and |moveY| < 0.5 (`SIDESTEP_STICK`) is phase
+  `'sidestep'` instead: `distance` m along the tangent around the opponent
+  over `move` frames (the side is kept in `dashVec`, re-aimed each frame),
+  `frames` total, no guard, dash cooldown shared; a leg wound forbids it
+  like a dash. A move with `thrust: true` (weapons.json — only the tube's
+  Tsuki) arriving while `evadeFrom <= phaseFrame <= move` and aimed at them
+  where they are OR where they stood when they stepped (`slips` in sim.ts —
+  without that, a well-timed step had already left the thrust's 26° arc
+  and it just whiffed, so the better timing paid less) sets
+  `FighterState.overreach`: the thrust plays out its active frames hitting
+  nothing (didHit), then a `stagger`-frame stagger replaces its recovery
+  (going straight to stagger on the first active frame skipped the thrust
+  pose — it never visibly went past). 50f: at 36 the broom's punish landed
+  on frame 33 — frame-perfect for a human, and a mid guard (45f deflect)
+  was strictly better. Nothing else is evaded. Events: `sidestep`, `slip`
+  (on `overreach` false→true; the stagger it ends in is NOT a deflect).
+  Render: a procedural layer in `FighterView.update` (torso turned off the
+  line, lean into the step, legs splayed, a dip — `SIDE_*`), eased by
+  `sideLean` while `phaseFrame < sidestepMove`. AI (`sidestep` in ai.json
+  = odds, rolled per thrust only with `cfg.sidestep`): steps when
+  `evadeFrom + 1` .. `move - 4` frames remain of the wind-up; seen later, it falls back on
+  its rolled plan (stepping late got the broom killed for nothing). Its
+  cart-dodge lateral dash is a sidestep now too. Measured (normal, 12 min,
+  5 seed sets): 56.0% katana vs 54.9% with feints alone — ~1.5 SE, and
+  odds 0 gives the same 55.6, so it's the cart-dodges/rng stream, not the
+  slips (~17 per 240 min, nearly all converted to kills). Normal's
+  reaction (7–18f) rarely beats the 15f Tsuki; hard's does. Levels (6 min,
+  vs normal): easy 27% / 26%, hard 76% / 60%.
 - Combat resolution priority in `sim.ts`: furniture rebound → blade clash (below) → active
   parry (any line, 8-frame window) → passive stance guard (matching line,
   idle only) → glancing wound (outer reach/arc: high/mid → arm, low → leg;
@@ -392,8 +423,9 @@ Each future stage = a location + a dumb argument that went too far.
   drawn when `cfg.carts` is set); `hurls` = the same for the weapon
   throw, counting only while the AI is wounded (only with `cfg.hurl`);
   `chain` = odds of chaining off a whiff (only with `cfg.chain`);
-  `feint` = odds of feinting a cut they've guarded (only with `cfg.feint`). Smoke tests must pass a profile:
-  `new AIController(seed, aiJson.normal)` — and `carts`/`hurl`/`chain`/`feint`/`honor` from
+  `feint` = odds of feinting a cut they've guarded (only with `cfg.feint`);
+  `sidestep` = odds of sidestepping a thrust (only with `cfg.sidestep`). Smoke tests must pass a profile:
+  `new AIController(seed, aiJson.normal)` — and `carts`/`hurl`/`chain`/`feint`/`sidestep`/`honor` from
   rules.json in the SimConfig to test the game as shipped.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
   on round start as PS1-RPG text windows (`dialogue.ts`, styles in

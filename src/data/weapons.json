@@ -22,7 +22,8 @@
         "recovery": 24,
         "reach": 2.05,
         "arcDeg": 26,
-        "lunge": 2.2
+        "lunge": 2.2,
+        "thrust": true
       },
       "low": {
         "name": "Kiriage",

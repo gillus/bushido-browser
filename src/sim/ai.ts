@@ -35,6 +35,8 @@ export interface AIProfile {
   chain: number;
   /** Odds of feinting a cut whose line they've moved their guard onto (rolled once per cut). */
   feint: number;
+  /** Odds of sidestepping a thrust instead of the rolled answer (rolled once per thrust). */
+  sidestep: number;
 }
 
 /** A cartridge (or a hurled weapon) on its way: the line it flies on, frames until it lands. */
@@ -51,6 +53,7 @@ export class AIController {
   private noticedThreat = false;
   private reactLeft = 0;
   private plan: ThreatPlan = 'guard';
+  private sidestep = false; // slip this thrust if there's still time (else fall back on `plan`)
   private planDone = false;
   private circleDir = 1;
   private circleTimer = 0;
@@ -361,8 +364,24 @@ export class AIController {
         this.planDone = false;
         this.reactLeft = Math.floor(this.profile.reaction * (0.6 + this.rng() * 0.9));
         this.plan = this.rollPlan();
+        this.sidestep = !!cfg.sidestep && !!op.move?.thrust && !me.wounds.leg
+          && this.rng() < this.profile.sidestep;
       }
       if (this.reactLeft > 0) { this.reactLeft--; return inp; }
+      if (!this.planDone && this.sidestep) {
+        // step just before it goes live, so the slip covers the thrust;
+        // seen too late for that, answer it the rolled way
+        const rules = cfg.sidestep!;
+        const remaining = op.phase === 'windup' && op.move ? effWindup(op, op.move) - op.phaseFrame : 0;
+        if (remaining > rules.evadeFrom && me.dashCooldown <= 0) {
+          if (remaining > rules.move - 4) return inp;
+          inp.moveX = this.circleDir;
+          inp.dash = true;
+          this.planDone = true;
+          return inp;
+        }
+        this.sidestep = false;
+      }
       if (!this.planDone) {
         switch (this.plan) {
           case 'freeze':

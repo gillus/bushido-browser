@@ -11,6 +11,7 @@ export interface MoveDef {
   arcDeg: number;   // horizontal arc the blade covers
   lunge: number;    // forward speed (m/s) applied late-windup + active
   minReach?: number; // inside this, hits only glance (polearm haft dead zone)
+  thrust?: boolean;  // a straight thrust: a sidestep (rules.json `sidestep`) slips it
 }
 
 export type MoveTable = Record<Line, MoveDef>;
@@ -229,7 +230,7 @@ export const EMPTY_INPUT: InputFrame = {
 
 export type FighterPhase =
   | 'bow' | 'idle' | 'windup' | 'active' | 'recovery' | 'throw' | 'hurl' | 'pickup'
-  | 'feint' | 'parry' | 'stagger' | 'flinch' | 'lock' | 'dead';
+  | 'feint' | 'sidestep' | 'parry' | 'stagger' | 'flinch' | 'lock' | 'dead';
 
 /**
  * Shuriken-uchi (`src/data/rules.json` → `carts`): a thrown game cartridge
@@ -299,6 +300,23 @@ export interface FeintRules {
   recovery: number;
 }
 
+/**
+ * Sidestep (`rules.json` → `sidestep`): a dash with the stick held to the
+ * side becomes a quick step around the opponent, `distance` m over `move`
+ * frames, keeping range. From frame `evadeFrom` until the step ends, a
+ * thrust (a move with `thrust: true`) passes by — the thrower overreaches
+ * into a `stagger`-frame stagger in place of its recovery. Nothing else is dodged, and there's no
+ * guard until the `frames` total have passed.
+ */
+export interface SidestepRules {
+  name: string;
+  move: number;
+  frames: number;
+  evadeFrom: number;
+  distance: number;
+  stagger: number;
+}
+
 export type CartEnd = 'hit' | 'guard' | 'parry' | 'wall' | 'prop' | 'spent';
 
 /** A cartridge — or a hurled weapon — in flight (or, once `end` is set, where it stopped). */
@@ -338,6 +356,7 @@ export interface FighterState {
   chain: number;          // follow-ups chained in the current string (0 = a fresh cut)
   chainQueued: boolean;   // attack pressed in recovery on a new line, before the chain window opened
   haste: number;          // wind-up multiplier of the current cut (chained cuts are quicker)
+  overreach: boolean;     // this thrust went past a sidestep: it runs on, then staggers instead of recovering
 }
 
 export type RoundPhase = 'fight' | 'end';

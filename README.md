@@ -36,7 +36,7 @@ npm run dev      # then open the printed localhost URL
 |------------|-------------|---------------|
 | Move       | W A S D     | Arrow keys    |
 | Attack     | F           | .             |
-| Dash       | G           | ,             |
+| Dash (sideways: sidestep) | G | ,     |
 | Parry (in your wind-up: feint) | Space | / |
 | Stance     | 1 / 2 / 3   | 8 / 9 / 0     |
 | Throw cart | T           | ;             |
@@ -50,7 +50,7 @@ alongside.
 |------------|-----|
 | Move       | Left stick or D-pad (analog: half tilt = slow walk) |
 | Attack     | A (✕) |
-| Dash       | B (○) |
+| Dash (sideways: sidestep) | B (○) |
 | Parry (in your wind-up: feint) | X (□) |
 | Throw cart | Y (△) |
 | Throw weapon | hold Y (△) |
@@ -106,7 +106,15 @@ Pads rumble when you're cut, killed, deflected or parried.
   have no guard and no parry until it's there. Use it when they move their
   guard onto your line or flinch into an early parry. If they answered
   with a cut of their own, it lands while you're feinting.
-- Dashing has no invincibility — it saves you only if it actually carries you
+- **Tai-sabaki 体捌き: the sidestep.** Dash with the stick held to the side
+  (not forward or back) and you step around them instead, keeping your
+  distance. Time it as a thrust comes (the tube's Tsuki, the game's fastest
+  move) and the thrust goes through the space you left: it runs on past
+  you and they stumble, wide open, for most of a second. It only beats
+  thrusts. A cut or a sweep still hits you, and you have no guard until
+  you've finished the step. Too early and the thrust arrives after the
+  step ends; too late and it lands first.
+- Otherwise dashing has no invincibility — it saves you only if it actually carries you
   out of the weapon's reach.
 - **Weapons have a reach game.** The broom out-ranges the cardboard tube by
   ~0.6 m with huge sweeping arcs, but is slower everywhere and has a
@@ -176,6 +184,7 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   `active` / `recovery` (in 60ths of a second), `reach` (m), `arcDeg`
   (horizontal arc), `lunge` (forward m/s during the swing), optional
   `minReach` (polearm dead zone — hits inside it only glance), optional
+  `thrust` (a sidestep slips it), optional
   `lockLeverage` (tsubazeriai push strength, default 1). The whole feel
   of the game lives here.
 - `stage.json` — arena radius, floor grid, fog, plus `props`: a list of
@@ -202,7 +211,10 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   plus `pickupFrames`, the stoop to get it back), chained cuts (`chain`:
   `open` = how far into a whiff's recovery the chain can start, `windupMult`,
   `max` follow-ups), feints (`feint`: `latest` = how far into the
-  wind-up a cut can still be dropped, `recovery` = frames back to guard) and the honor code (`bowFrames`, and
+  wind-up a cut can still be dropped, `recovery` = frames back to guard),
+  the sidestep (`sidestep`: `distance` m over `move` frames, thrusts slip
+  past from frame `evadeFrom` to the end of the move, `frames` before you're
+  on guard again, `stagger` = how long an overreached thrower is open) and the honor code (`bowFrames`, and
   `backDeg`: how far round behind someone a hit counts as "in the back").
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
   pairs), played out in RPG text boxes before each round. New stage = new

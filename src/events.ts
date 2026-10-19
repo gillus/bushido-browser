@@ -29,6 +29,8 @@ export type GameEvent =
   | { type: 'pickup'; who: number }               // `who` has their weapon back
   | { type: 'chain'; who: number }                // `who` turned a whiff's recovery into the next cut
   | { type: 'feint'; who: number }                // `who` dropped their cut in the wind-up
+  | { type: 'sidestep'; who: number }             // `who` stepped aside
+  | { type: 'slip'; who: number }                 // `who`'s thrust went past a sidestep: overreached
   | { type: 'dishonor'; who: number };            // `who` broke the honor code
 
 export interface TickSnapshot {
@@ -37,7 +39,7 @@ export interface TickSnapshot {
   lockBalance: number;
   fighters: {
     phase: FighterPhase; stance: Line; dashLeft: number; step: number;
-    wounds: Record<WoundRegion, boolean>; dishonored: boolean; armed: boolean;
+    wounds: Record<WoundRegion, boolean>; dishonored: boolean; armed: boolean; overreach: boolean;
   }[];
   downs: boolean[];
   carts: (CartEnd | null)[];
@@ -58,6 +60,7 @@ export function snapshot(sim: SimState): TickSnapshot {
     fighters: sim.fighters.map((f) => ({
       phase: f.phase, stance: f.stance, dashLeft: f.dashLeft,
       step: stepIndex(f.walkCycle), wounds: { ...f.wounds }, dishonored: f.dishonored, armed: f.armed,
+      overreach: f.overreach,
     })),
     downs: sim.obstacleState.map((s) => s.down),
     carts: sim.carts.map((c) => c.end),
@@ -98,7 +101,9 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
       if (b.phase === 'windup' && f.phase === 'active') out.push({ type: 'swing', who: i });
       else if (b.phase === 'recovery' && f.phase === 'windup') out.push({ type: 'chain', who: i });
       else if (f.phase === 'feint') out.push({ type: 'feint', who: i });
+      else if (f.phase === 'sidestep') out.push({ type: 'sidestep', who: i });
       else if (f.phase === 'stagger' && f.rebound) out.push({ type: 'rebound', who: i });
+      else if (f.phase === 'stagger' && b.overreach) { /* the slip was heard as it went past */ }
       else if (f.phase === 'stagger' && b.phase !== 'lock') {
         out.push({ type: o.phase === 'parry' ? 'parried' : 'deflect', who: i });
       } else if (f.phase === 'parry') out.push({ type: 'parryTry', who: i });
@@ -111,6 +116,7 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
     if (f.dishonored && !b.dishonored) out.push({ type: 'dishonor', who: i });
     if (f.armed && !b.armed) out.push({ type: 'pickup', who: i });
     if (f.stance !== b.stance) out.push({ type: 'stance', who: i });
+    if (f.overreach && !b.overreach) out.push({ type: 'slip', who: i });
     if (f.dashLeft > 0 && b.dashLeft <= 0) out.push({ type: 'dash', who: i });
     if (f.phase !== 'dead' && stepIndex(f.walkCycle) > b.step) {
       out.push({ type: 'step', who: i, kneeling: f.wounds.leg });

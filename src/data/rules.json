@@ -28,6 +28,14 @@
     "latest": 0.6,
     "recovery": 14
   },
+  "sidestep": {
+    "name": "Tai-sabaki 体捌き",
+    "move": 10,
+    "frames": 16,
+    "evadeFrom": 2,
+    "distance": 0.9,
+    "stagger": 50
+  },
   "honor": {
     "bowFrames": 72,
     "backDeg": 120
