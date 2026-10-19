@@ -340,7 +340,11 @@
         0.06
       ],
       "color": "#5a2f4f",
-      "rot": 90
+      "rot": 90,
+      "fixture": "poster",
+      "art": "rpg",
+      "label": "AZURE CHRONICLE",
+      "accent": "#e8c84a"
     },
     {
       "pos": [
@@ -354,7 +358,11 @@
         0.06
       ],
       "color": "#2f4a6f",
-      "rot": 0
+      "rot": 180,
+      "fixture": "poster",
+      "art": "shooter",
+      "label": "SOLAR LANCER",
+      "accent": "#3f8fe0"
     },
     {
       "pos": [
@@ -368,7 +376,11 @@
         0.06
       ],
       "color": "#6f5a2f",
-      "rot": 90
+      "rot": -90,
+      "fixture": "poster",
+      "art": "racer",
+      "label": "NITRO HIGHWAY 2",
+      "accent": "#e8c84a"
     },
     {
       "pos": [

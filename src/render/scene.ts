@@ -6,6 +6,7 @@ import { buildShelf } from './fixtures';
 import { Arcade } from './arcade';
 import { DisplayTable } from './displayTable';
 import { Kiosk } from './kiosk';
+import { buildPoster } from './poster';
 import { buildStandee } from './standee';
 import { buildStorefront, holedWallGeo, storefrontHoles, wallAngle } from './storefront';
 
@@ -197,7 +198,10 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
       : null;
     if (smashable) smashables.push(smashable);
     const fixture = smashable?.object
-      ?? (p.fixture === 'shelf' ? buildShelf(p) : p.fixture === 'standee' ? buildStandee(p) : null);
+      ?? (p.fixture === 'shelf' ? buildShelf(p)
+        : p.fixture === 'standee' ? buildStandee(p)
+        : p.fixture === 'poster' ? buildPoster(p)
+        : null);
     if (fixture) {
       scene.add(fixture);
     } else {

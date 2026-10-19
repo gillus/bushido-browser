@@ -142,8 +142,8 @@ Each future stage = a location + a dumb argument that went too far.
   prop makes it cardboard — topples on touch, back up next round; non-solid
   props are pure set dressing.
   **Fixtures (2026-10-17, `fixtures.ts`, `kiosk.ts`, `arcade.ts`,
-  `displayTable.ts`, `standee.ts`):** a prop with `"fixture": "shelf" | "kiosk" |
-  "arcade" | "table" | "standee"` keeps its box as the collider but renders as shop
+  `displayTable.ts`, `standee.ts`, `poster.ts`):** a prop with `"fixture":
+  "shelf" | "kiosk" | "arcade" | "table" | "standee" | "poster"` keeps its box as the collider but renders as shop
   furniture built inside it — front = local +z, so a +z-wall shelf has
   `rot: 180`, -x wall `90`, +x wall `-90`. Shelves take `label` (lit
   header sign), `accent` (sign colour) and `stock`: `games` (jewel/keep
@@ -227,6 +227,14 @@ Each future stage = a location + a dumb argument that went too far.
   alpha-tested quads (front print, brown board behind) plus an easel
   strut, built centred in its box so the knockable topple swings it like a
   plain prop.
+  *Posters* (`poster.ts`, `"fixture": "poster"`, 2026-10-19): the wall
+  posters are printed sheets for the shop's fictional games — `art`:
+  shooter (Solar Lancer, the arcade's game) | racer (Nitro Highway 2, the
+  kiosk's) | rpg; `label` = title, `accent` = logo colour — paper margin,
+  footer band, taped corners, one bottom corner peeled (cut out with an
+  alpha test so the real wall shows), a slight tilt. Still thin non-solid
+  wall decor, so they hide with their wall. Front = +z like the other
+  fixtures (+z wall `rot: 180`, -x `90`, +x `-90`).
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
   on round start as PS1-RPG text windows (`dialogue.ts`, styles in
   `index.html`, 2026-10-17): one speaker at a time, name tab, typewriter

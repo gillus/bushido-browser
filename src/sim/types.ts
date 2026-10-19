@@ -94,8 +94,9 @@ export interface StageProp {
   solid?: boolean;   // fighters (and ragdolls) collide with it
   knockable?: boolean; // cardboard: topples on body contact instead of blocking
   // Render-only shop furniture built inside the box (front = local +z):
-  fixture?: 'shelf' | 'kiosk' | 'arcade' | 'table' | 'standee';
-  label?: string;  // shelf header / kiosk topper text / standee game title
+  fixture?: 'shelf' | 'kiosk' | 'arcade' | 'table' | 'standee' | 'poster';
+  label?: string;  // shelf header / kiosk topper text / standee or poster game title
+  art?: 'shooter' | 'racer' | 'rpg'; // poster illustration
   accent?: string; // sign colour
   stock?: 'games' | 'bigbox' | 'pegs'; // what a shelf holds (default games)
 }
