@@ -142,8 +142,8 @@ Each future stage = a location + a dumb argument that went too far.
   prop makes it cardboard — topples on touch, back up next round; non-solid
   props are pure set dressing.
   **Fixtures (2026-10-17, `fixtures.ts`, `kiosk.ts`, `arcade.ts`,
-  `displayTable.ts`):** a prop with `"fixture": "shelf" | "kiosk" | "arcade" |
-  "table"` keeps its box as the collider but renders as shop
+  `displayTable.ts`, `standee.ts`):** a prop with `"fixture": "shelf" | "kiosk" |
+  "arcade" | "table" | "standee"` keeps its box as the collider but renders as shop
   furniture built inside it — front = local +z, so a +z-wall shelf has
   `rot: 180`, -x wall `90`, +x wall `-90`. Shelves take `label` (lit
   header sign), `accent` (sign colour) and `stock`: `games` (jewel/keep
@@ -212,11 +212,21 @@ Each future stage = a location + a dumb argument that went too far.
   stays upright, so a toppled render would leave fighters bumping into
   air and corpses leaning on nothing. `Sfx.crt` / `Sfx.spark`.
   *Display table* (`displayTable.ts`, `BREAK_SPEED` 1.8 m/s — any
-  direction counts, so a corpse slumping onto the glass breaks it too):
+  direction counts, so a corpse slumping onto the glass breaks it too;
+  blades break it as well: a high cut whose centerline crosses it —
+  `cutThrough()` in `debris.ts`; the sim lets it pass, so the cut goes on
+  through — or a low cut rebounding off it, `struck()`; the mid thrust
+  rides over it):
   a `solid` Breakable; the glass top shatters, shards rain into the
   vitrine (they land on the felt) and over the floor, teeth stay in the
   frame, the cases lying on top fly. A corpse then rests at the old glass
   height, ~7 cm over the felt — the collider can't sink. `Sfx.glass`.
+  *Standee* (`standee.ts`, `knockable` + `"fixture": "standee"`, 2026-10-19):
+  a die-cut cardboard promo for a fictional 32-bit samurai fighter
+  (`label` = title, `accent` = the sun/obi colour): canvas art on two
+  alpha-tested quads (front print, brown board behind) plus an easel
+  strut, built centred in its box so the knockable topple swings it like a
+  plain prop.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
   on round start as PS1-RPG text windows (`dialogue.ts`, styles in
   `index.html`, 2026-10-17): one speaker at a time, name tab, typewriter

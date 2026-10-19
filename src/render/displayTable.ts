@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { Obstacle, SimState, StageProp } from '../sim/types';
-import { Debris, RoundWatch, Smash, Smashable, shardGeo, shardMat, shoved } from './debris';
+import { cutThrough, Debris, RoundWatch, Smash, Smashable, shardGeo, shardMat, shoved, struck } from './debris';
 import { BoxBatch, c, rng } from './fixtures';
 import { Breakable } from './ragdoll';
 
 const BREAK_SPEED = 1.8;  // m/s — a corpse slumping onto the glass is plenty
 const SHOVE_SPEED = 4;    // a shoved fighter's slide, for the debris
+const CUT_SPEED = 3;      // a blade's blow, for the debris
 const FLOOR = -0.016;     // the shop floor (y = -0.02), plus a hair
 const RAIL = 0.04;        // the metal frame round the glass
 const DEPTH = 0.09;       // glass down to the felt
@@ -23,7 +24,9 @@ interface Loose {
  * lit vitrine of games and a console laid out on felt under a glass top,
  * and a few cases left lying on the glass. It's a solid prop and a
  * `Breakable` that stays solid: a corpse landing on it or flung into it at
- * `BREAK_SPEED`, or a fighter shoved into it out of a tsubazeriai, shatters
+ * `BREAK_SPEED`, a fighter shoved into it out of a tsubazeriai, or a blade
+ * — an overhead cut coming down across it (the sim lets that pass over: the
+ * blade goes on through), or a rising cut rebounding off it — shatters
  * the top — shards rain into the vitrine and over the floor, teeth stay in
  * the frame, the cases on top go flying. Render-only; reglazed for the next
  * round.
@@ -118,8 +121,12 @@ export class DisplayTable implements Smashable {
   /** Per render frame: shove impacts, debris, and the reglazing when a new round starts. */
   update(sim: SimState, dt: number): Smash[] {
     if (this.round.newRound(sim)) this.reset();
-    const shove = this.unit.broken ? null : shoved(sim, this.ob, SHOVE_SPEED);
-    if (shove) this.smash(shove.at.setY(this.h), shove.vel);
+    if (!this.unit.broken) {
+      const hit = shoved(sim, this.ob, SHOVE_SPEED)
+        ?? cutThrough(sim, this.ob, CUT_SPEED, ['high'])
+        ?? struck(sim, this.ob, CUT_SPEED);
+      if (hit) this.smash(hit.at.setY(this.h), hit.vel);
+    }
     this.debris.update(dt);
     const out = this.smashes;
     this.smashes = [];

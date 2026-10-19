@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BODY_RADIUS } from '../sim/sim';
+import { BLADE_FROM, BLADE_STEP, BODY_RADIUS, bladeSpan } from '../sim/sim';
 import { Line, Obstacle, SimState } from '../sim/types';
 import { Breakable } from './ragdoll';
 
@@ -126,6 +126,29 @@ export function struck(
       local: { x: lx, z: lz },
       line: f.move.line,
     };
+  }
+  return null;
+}
+
+/**
+ * A live cut on one of `lines` whose centerline passes through `ob` — over
+ * furniture too low to stop it (the sim lets it through): where it crosses
+ * (floor level) and the blow as a velocity of `speed` along the cut.
+ */
+export function cutThrough(
+  sim: SimState, ob: Obstacle, speed: number, lines: Line[],
+): { at: THREE.Vector3; vel: THREE.Vector3 } | null {
+  for (let i = 0; i < 2; i++) {
+    const f = sim.fighters[i];
+    if (f.phase !== 'active' || !f.move || !lines.includes(f.move.line)) continue;
+    const fx = Math.sin(f.facing), fz = Math.cos(f.facing);
+    const until = bladeSpan(f, sim.fighters[1 - i], f.move, f.facing);
+    for (let r = BLADE_FROM; r <= until; r += BLADE_STEP) {
+      const x = f.pos.x + fx * r, z = f.pos.z + fz * r;
+      const dx = x - ob.x, dz = z - ob.z;
+      if (Math.abs(dx * ob.c - dz * ob.s) > ob.halfW || Math.abs(dx * ob.s + dz * ob.c) > ob.halfD) continue;
+      return { at: new THREE.Vector3(x, 0, z), vel: new THREE.Vector3(fx, 0, fz).multiplyScalar(speed) };
+    }
   }
   return null;
 }

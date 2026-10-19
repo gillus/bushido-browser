@@ -51,8 +51,8 @@ const SHOVE_STAGGER_FRAMES = 36;  // shorter than a deflect: a real but not free
 // gets knocked flat. Tested along the cut's centerline only (that's where
 // the rendered weapon goes), from the hands out.
 const BLADE_CLEARS: Record<Line, number> = { high: 0.9, mid: 1.05, low: 0.5 };
-const BLADE_FROM = 0.4;           // m from body center: the hands
-const BLADE_STEP = 0.1;
+export const BLADE_FROM = 0.4;    // m from body center: the hands
+export const BLADE_STEP = 0.1;
 const REBOUND_STAGGER_FRAMES = 32; // about a whiff's recovery, from a worse pose
 
 export interface SimConfig {
@@ -402,6 +402,19 @@ function inBox(ob: Obstacle, x: number, z: number): boolean {
 }
 
 /**
+ * How far out along its centerline `move`, cut from `f` along `facing`,
+ * travels: to the opponent's body if they're in the swing (the blade meets
+ * them first), else full reach. Starts at `BLADE_FROM`, the hands.
+ */
+export function bladeSpan(f: FighterState, o: FighterState, move: MoveDef, facing: number): number {
+  const dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z;
+  const d = Math.hypot(dx, dz);
+  const halfArc = (move.arcDeg * Math.PI / 180) / 2;
+  const inArc = Math.abs(angleWrap(Math.atan2(dx, dz) - facing)) <= halfArc;
+  return inArc && d <= move.reach ? d - BODY_RADIUS : move.reach;
+}
+
+/**
  * Where `move`, cut from `f` along `facing`, runs into a wall or solid
  * furniture before it reaches `o` — null if nothing's in the way. Pass
  * `knock` to topple the cardboard the blade passes through (only a real
@@ -412,12 +425,7 @@ export function bladeObstruction(
   cfg: SimConfig, sim: SimState, knock?: boolean,
 ): { x: number; z: number } | null {
   const fx = Math.sin(facing), fz = Math.cos(facing);
-  // the opponent in the swing ends it: the blade meets the body first
-  const dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z;
-  const d = Math.hypot(dx, dz);
-  const halfArc = (move.arcDeg * Math.PI / 180) / 2;
-  const inArc = Math.abs(angleWrap(Math.atan2(dx, dz) - facing)) <= halfArc;
-  const until = inArc && d <= move.reach ? d - BODY_RADIUS : move.reach;
+  const until = bladeSpan(f, o, move, facing);
   const clears = BLADE_CLEARS[move.line];
   for (let r = BLADE_FROM; r <= until; r += BLADE_STEP) {
     const x = f.pos.x + fx * r, z = f.pos.z + fz * r;

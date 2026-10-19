@@ -491,7 +491,10 @@
       "color": "#7a3f5a",
       "rot": 35,
       "solid": true,
-      "knockable": true
+      "knockable": true,
+      "fixture": "standee",
+      "label": "STEEL RONIN",
+      "accent": "#d23a26"
     },
     {
       "pos": [

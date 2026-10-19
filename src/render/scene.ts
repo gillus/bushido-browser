@@ -6,6 +6,7 @@ import { buildShelf } from './fixtures';
 import { Arcade } from './arcade';
 import { DisplayTable } from './displayTable';
 import { Kiosk } from './kiosk';
+import { buildStandee } from './standee';
 import { buildStorefront, holedWallGeo, storefrontHoles, wallAngle } from './storefront';
 
 export interface SceneBundle {
@@ -159,7 +160,7 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
   }
   if (stage.walls) scene.add(roomWalls(stage.walls));
   interface Knockable {
-    mesh: THREE.Mesh; obIndex: number;
+    mesh: THREE.Object3D; obIndex: number;
     pos0: THREE.Vector3; quat0: THREE.Quaternion;
     baseY: number; halfT: number;
   }
@@ -195,7 +196,8 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
       : p.fixture === 'table' ? new DisplayTable(p)
       : null;
     if (smashable) smashables.push(smashable);
-    const fixture = smashable?.object ?? (p.fixture === 'shelf' ? buildShelf(p) : null);
+    const fixture = smashable?.object
+      ?? (p.fixture === 'shelf' ? buildShelf(p) : p.fixture === 'standee' ? buildStandee(p) : null);
     if (fixture) {
       scene.add(fixture);
     } else {
@@ -223,10 +225,12 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
       }
     }
     if (p.solid) {
-      if (p.knockable && !fixture) {
+      // (a knockable fixture is built centred in its box, like the plain mesh)
+      const body = fixture ?? mesh;
+      if (p.knockable && (!fixture || p.fixture === 'standee')) {
         knockables.push({
-          mesh, obIndex: solidIndex,
-          pos0: mesh.position.clone(), quat0: mesh.quaternion.clone(),
+          mesh: body, obIndex: solidIndex,
+          pos0: body.position.clone(), quat0: body.quaternion.clone(),
           baseY: p.pos[1], halfT: Math.min(p.size[0], p.size[2]) / 2,
         });
       }
