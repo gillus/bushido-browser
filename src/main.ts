@@ -179,6 +179,7 @@ for (const v of views) {
   v.hurlWindup = rules.hurl.windup;
   v.feintRecovery = rules.feint.recovery;
   v.sidestepMove = rules.sidestep.move;
+  v.ceiling = stage.walls?.height ?? Infinity;
 }
 scene.add(views[0].root, views[1].root);
 const carts = new CartView(

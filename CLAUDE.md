@@ -36,6 +36,23 @@ Each future stage = a location + a dumb argument that went too far.
   and the ragdoll segments are deep clones of those skins, so the corpse
   always matches the living outfit — add new body parts to a skin, never
   build a second copy for the ragdoll.
+  **Weapon avoidance (2026-10-19, `bladeAvoid.ts`):** the sim's body is a
+  0.34 m circle, so a posed weapon used to reach 1.2 m (tube) / 1.8 m
+  (broom) into shelves, through the floor at the end of a downward cut and
+  through the ceiling in the broom's high wind-up. After posing,
+  `FighterView.avoidBlade` tests the weapon line (a capsule, `blade`
+  back/fwd/r) against the live obstacles + room walls, unbroken window
+  panes, the floor (bristles may sink `FLOOR_SINK`) and `ceiling` (main
+  sets the room height); if it's in something, `BladeAvoider` finds the
+  smallest turn about the hand that clears it (8 directions around the
+  weapon, raise preferred, the last direction kept unless another saves
+  `SWITCH`; the hand itself inside a box → least length inside), eased in
+  at `AVOID_IN` (or the pose rate if faster) and out at `AVOID_OUT`. The left arm swings
+  so its hand follows the haft (not mid-throw). Off in a blade lock;
+  cardboard is ignored during a cut (the cut knocks it flat). Render only
+  — hits are still the reach/arc wedge. Measured: random spots near
+  furniture facing the opponent, broom 50/400 poses clipping → 2 (a cut
+  through the standee, a hand inside the kiosk), tube 10 → 0.
 - `src/main.ts` owns input edge-detection, the fixed-timestep accumulator
   loop, and the HUD. Sim ticks and render frames are decoupled. Keyboard and
   gamepad (`gamepad.ts`, polled once per render frame; pad edges accumulate

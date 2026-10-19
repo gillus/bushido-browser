@@ -4,6 +4,7 @@ import {
   bowPose, feintPose, hurlPoses, JointName, kneelLegs, lockPose, movePoses, parryPose, pickupPose, Pose, staggerPose,
   stancePoses, throwPoses, unarmedPose,
 } from './poses';
+import { BladeAvoider, BladeShape } from './bladeAvoid';
 import { Breakable, Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
 import {
   ballGeo, blobGeo, clothGeo, faceGroup, haoriGroup, haoriSleeveGeo, hairGroup, handGroup,
@@ -35,6 +36,11 @@ const SIDE_TURN = 0.45;
 const SIDE_LEAN = 0.16;
 const SIDE_SPLAY = 0.3;
 const SIDE_DIP = 0.08;
+// Weapon avoidance (bladeAvoid.ts): how fast the weapon turns out of the
+// way and back (per s), and how far a broom's bristles may press into the floor
+const AVOID_IN = 16;
+const AVOID_OUT = 8;
+const FLOOR_SINK = 0.06;
 
 interface Dangler {
   node: THREE.Object3D;
@@ -432,6 +438,13 @@ export class FighterView {
     mkLeg(1, 'hipR', 'kneeR');
     mkLeg(-1, 'hipL', 'kneeL');
 
+    // the weapon line through the grip, for keeping it out of the furniture
+    this.blade = weapon.look === 'tube'
+      ? { back: 0.12, fwd: weapon.bladeLength + 0.18, r: 0.04 }
+      : weapon.shaftLength > 0
+        ? { back: 0.4, fwd: weapon.shaftLength - 0.4 + weapon.bladeLength, r: 0.06 }
+        : { back: 0.17, fwd: weapon.bladeLength + 0.07, r: 0.03 };
+
     this.dims = {
       h, foreLen, shinLen,
       tipLen: weapon.look === 'tube'
@@ -489,6 +502,55 @@ export class FighterView {
       const local = d.dir.clone().applyQuaternion(this.parentQ.invert());
       d.node.quaternion.setFromUnitVectors(d.restDir, local).multiply(d.rest);
     }
+  }
+
+  /**
+   * Turn the weapon about the hand, out of any furniture, wall, floor or
+   * ceiling the pose put it into (bladeAvoid.ts). Render only: the sim's
+   * blade is the reach/arc wedge, and a cut into furniture already
+   * rebounds there. Not in a blade lock — the crossed blades are the point.
+   */
+  private avoidBlade(f: FighterState, dt: number, rate: number): void {
+    const wrist = this.joints.get('wristR')!;
+    const goal = this.avoidGoal.identity();
+    this.root.updateMatrixWorld(true);
+    const hand = wrist.getWorldPosition(this.handPos);
+    if (f.armed && f.phase !== 'lock') {
+      const d = wrist.localToWorld(this.bladeDir.set(0, -1, 0)).sub(hand).normalize();
+      const reach = Math.max(this.blade.back, this.blade.fwd) + this.blade.r;
+      const boxes = this.bladeBoxes;
+      boxes.length = 0;
+      const near = (ob: Obstacle) =>
+        Math.hypot(ob.x - hand.x, ob.z - hand.z) < reach + Math.hypot(ob.halfW, ob.halfD);
+      for (const ob of this.liveObstacles) {
+        // a cut knocks cardboard flat rather than stopping on it
+        if (ob.knockable && f.phase === 'active') continue;
+        if (near(ob)) boxes.push(ob);
+      }
+      for (const b of this.breakables) if (!b.solid && !b.broken && near(b.ob)) boxes.push(b.ob);
+      this.forward.set(Math.sin(this.facing), 0, Math.cos(this.facing));
+      this.avoider.solve(hand, d, this.forward, this.blade,
+        { boxes, floor: -FLOOR_SINK, ceiling: this.ceiling }, goal);
+    }
+    const out = goal.w > 0.99999;
+    this.avoidQ.slerp(goal, 1 - Math.exp(-(out ? AVOID_OUT : Math.max(AVOID_IN, rate)) * dt));
+    if (this.avoidQ.w > 0.99999) return;
+    // a world turn about the hand, in the wrist's parent space
+    this.turnJoint(wrist, this.avoidQ);
+    if (f.phase === 'throw') return; // the off hand is busy with a cartridge
+    // the off hand follows the haft: swing that arm so the hand lands where
+    // the turn carried its grip
+    const sh = this.joints.get('shoulderL')!;
+    const s = sh.getWorldPosition(this.tmpV);
+    const grip = this.joints.get('elbowL')!.localToWorld(this.tmpT.set(0, -this.dims.foreLen, 0));
+    const moved = this.bladeDir.copy(grip).sub(hand).applyQuaternion(this.avoidQ).add(hand).sub(s).normalize();
+    this.turnJoint(sh, this.avoidGoal.setFromUnitVectors(grip.sub(s).normalize(), moved));
+  }
+
+  /** Apply world rotation `q` to joint `j` (about its own pivot). */
+  private turnJoint(j: THREE.Object3D, q: THREE.Quaternion): void {
+    const pq = j.parent!.getWorldQuaternion(this.parentQ);
+    j.quaternion.premultiply(pq).premultiply(q).premultiply(pq.invert());
   }
 
   /** Register a limb's materials for the blood tint (skips `noTint` meshes). */
@@ -632,6 +694,16 @@ export class FighterView {
   /** Frames a sidestep travels for (rules.json `sidestep.move`). */
   sidestepMove = 10;
   private sideLean = 0; // -1 stepping left … 1 right, eased
+  /** Room height: the weapon stays under it (Infinity without walls). */
+  ceiling = Infinity;
+  private blade!: BladeShape;
+  private avoider = new BladeAvoider();
+  private avoidQ = new THREE.Quaternion(); // eased world turn about the hand
+  private avoidGoal = new THREE.Quaternion();
+  private bladeBoxes: Obstacle[] = [];
+  private handPos = new THREE.Vector3();
+  private bladeDir = new THREE.Vector3();
+  private forward = new THREE.Vector3();
 
   /** A copy of the weapon as carried (grip at the origin, along -Y), for throwing. */
   weaponClone(): THREE.Object3D {
@@ -782,6 +854,7 @@ export class FighterView {
     }
     this.hipY += (targetHipY - this.hipY) * Math.min(1, 8 * dt);
     this.hips.position.y = this.hipY;
+    this.avoidBlade(f, dt, target.rate);
     this.updateDanglers(dt);
 
     // blood tint on wounded limbs (idempotent; restores on round reset)
