@@ -11,7 +11,23 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-type ThreatPlan = 'guard' | 'parry' | 'retreat' | 'trade';
+type ThreatPlan = 'freeze' | 'guard' | 'parry' | 'retreat' | 'trade';
+
+/** A difficulty level (`src/data/ai.json`). Frame counts are sim ticks. */
+export interface AIProfile {
+  label: string;
+  /** Mean frames before answering a wind-up. Lower = harder. */
+  reaction: number;
+  /** Odds of each answer to a wind-up; `freeze` = do nothing at all. */
+  plans: Partial<Record<ThreatPlan, number>>;
+  /** Frames between probing cuts: [min, random extra]; vs a wounded opponent. */
+  poke: [number, number];
+  pokeWounded: [number, number];
+  /** Frames to notice an opening (stagger, recovery…): [min, random extra]. */
+  punishDelay: [number, number];
+}
+
+const PLAN_ORDER: ThreatPlan[] = ['freeze', 'guard', 'parry', 'retreat', 'trade'];
 
 /**
  * A patient duelist: keeps spacing, reacts to wind-ups with a human-ish
@@ -28,10 +44,15 @@ export class AIController {
   private pokeTimer = 90;
   private stanceTimer = 120;
   private lockRate = -1; // push presses per frame in the current lock; -1 = not locked
+  private openingWait = -1; // frames left before punishing the current opening; -1 = none seen
 
-  /** reaction: mean extra frames of delay. Lower = harder. */
-  constructor(seed: number, private reaction = 12) {
+  constructor(seed: number, private profile: AIProfile) {
     this.rng = mulberry32(seed);
+  }
+
+  /** Roll [min, random extra] frames; no rng draw when there's no spread. */
+  private frames([min, extra]: [number, number]): number {
+    return extra > 0 ? min + Math.floor(this.rng() * extra) : min;
   }
 
   update(sim: SimState, cfg: SimConfig, selfIndex: number): InputFrame {
@@ -131,14 +152,20 @@ export class AIController {
       if (!this.noticedThreat) {
         this.noticedThreat = true;
         this.planDone = false;
-        this.reactLeft = Math.floor(this.reaction * (0.6 + this.rng() * 0.9));
-        const r = this.rng();
-        this.plan =
-          r < 0.42 ? 'guard' : r < 0.62 ? 'parry' : r < 0.85 ? 'retreat' : 'trade';
+        this.reactLeft = Math.floor(this.profile.reaction * (0.6 + this.rng() * 0.9));
+        let r = this.rng();
+        this.plan = 'trade';
+        for (const p of PLAN_ORDER) {
+          const w = this.profile.plans[p] ?? 0;
+          if (r < w) { this.plan = p; break; }
+          r -= w;
+        }
       }
       if (this.reactLeft > 0) { this.reactLeft--; return inp; }
       if (!this.planDone) {
         switch (this.plan) {
+          case 'freeze':
+            break; // caught flat-footed: whatever stance it's in will have to do
           case 'guard':
             if (op.move && me.stance !== op.move.line) inp.stance = op.move.line;
             break;
@@ -179,6 +206,14 @@ export class AIController {
     this.noticedThreat = false;
 
     // --- Punish windows ---
+    const opening = op.phase === 'stagger' || op.phase === 'flinch' || op.phase === 'recovery'
+      || (op.phase === 'parry' && op.phaseFrame >= PARRY_WINDOW);
+    if (!opening) this.openingWait = -1;
+    else {
+      // a slower duelist takes a moment to see it (and may miss it entirely)
+      if (this.openingWait < 0) this.openingWait = this.frames(this.profile.punishDelay);
+      if (this.openingWait > 0) { this.openingWait--; return inp; }
+    }
     // From inside our own dead zone, back up to killing range first.
     const myMin = myMove.minReach ?? 0;
     if (op.phase === 'stagger' || op.phase === 'flinch') {
@@ -226,9 +261,7 @@ export class AIController {
     if (--this.pokeTimer <= 0) {
       if (d < strikeRange + 0.5) {
         inp.attack = true;
-        this.pokeTimer = opWounded
-          ? 40 + Math.floor(this.rng() * 70)
-          : 70 + Math.floor(this.rng() * 130);
+        this.pokeTimer = this.frames(opWounded ? this.profile.pokeWounded : this.profile.poke);
       } else {
         this.pokeTimer = 20; // not in range yet, check again soon
       }

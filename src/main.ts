@@ -2,7 +2,8 @@ import charactersJson from './data/characters.json';
 import weaponsJson from './data/weapons.json';
 import stageJson from './data/stage.json';
 import flavorJson from './data/flavor.json';
-import { AIController } from './sim/ai';
+import aiJson from './data/ai.json';
+import { AIController, AIProfile } from './sim/ai';
 import { createSim, MATCH_WINS, ROUND_END_FRAMES, SimConfig, stepSim, TICK } from './sim/sim';
 import {
   CharacterDef, EMPTY_INPUT, InputFrame, Line, SimState, StageDef, WeaponDef, obstaclesFromStage,
@@ -46,13 +47,19 @@ const cfg: SimConfig = {
 function loadPref(key: string): string | null {
   try { return localStorage.getItem(`bushido.${key}`); } catch { return null; }
 }
-function savePref(key: string, on: boolean): void {
-  try { localStorage.setItem(`bushido.${key}`, on ? '1' : '0'); } catch { /* private mode */ }
+function savePref(key: string, value: boolean | string): void {
+  const v = typeof value === 'string' ? value : value ? '1' : '0';
+  try { localStorage.setItem(`bushido.${key}`, v); } catch { /* private mode */ }
 }
 
 let sim = createSim(cfg);
 let p2IsAI = loadPref('p2ai') !== '0';
-let ai = new AIController(1337);
+// difficulty: L (or pad X while paused) cycles easy → normal → hard
+const AI_LEVELS = aiJson as unknown as Record<string, AIProfile>;
+const LEVEL_KEYS = Object.keys(AI_LEVELS);
+let aiLevel = LEVEL_KEYS.includes(loadPref('ai') ?? '') ? loadPref('ai')! : 'normal';
+let ai = new AIController(1337, AI_LEVELS[aiLevel]);
+const newAI = (): void => { ai = new AIController((Math.random() * 1e9) | 0, AI_LEVELS[aiLevel]); };
 
 // ---------- audio ----------
 const sfx = new Sfx(fighterWeapons, !!stage.walls); // walls = indoors = fluorescent hum
@@ -146,6 +153,7 @@ const hud = {
   lockMark: document.querySelector<HTMLElement>('#lock .mark')!,
   help: document.getElementById('help')!,
   pause: document.getElementById('pause')!,
+  pauseLevel: document.querySelector<HTMLElement>('#pause .level')!,
   match: document.getElementById('match')!,
   matchWho: document.querySelector<HTMLElement>('#match .who')!,
   matchScore: document.querySelector<HTMLElement>('#match .score')!,
@@ -155,6 +163,8 @@ const hud = {
 // asked for it (that choice is remembered)
 let helpPref = loadPref('help');
 hud.help.hidden = helpPref === '0';
+
+let joined = 0; // seconds left on the "pad 2 joined" notice
 
 let paused = false;
 function setPaused(on: boolean): void {
@@ -202,12 +212,16 @@ function renderHud(): void {
   hud.lock.style.display = locked ? 'block' : 'none';
   if (locked) hud.lockMark.style.left = `${50 + sim.lockBalance * 50}%`;
   const status = [
-    p2IsAI ? `${cfg.chars[1].name}: AI (M for 2P)` : `${cfg.chars[1].name}: HUMAN (M for AI)`,
-    pads.count ? `${pads.count} PAD${pads.count > 1 ? 'S' : ''}` : '',
+    joined > 0 ? `PAD 2 JOINED AS ${cfg.chars[1].name.toUpperCase()}`
+      : p2IsAI ? `${cfg.chars[1].name}: AI ${AI_LEVELS[aiLevel].label} (L level · M for 2P)`
+      : `${cfg.chars[1].name}: HUMAN (M for AI)`,
+    p2IsAI && pads.count > 1 ? 'PAD 2: START TO JOIN'
+      : pads.count ? `${pads.count} PAD${pads.count > 1 ? 'S' : ''}` : '',
     sfx.muted ? 'SOUND OFF (N)' : sfx.locked ? 'CLICK OR PRESS A KEY FOR SOUND' : '',
     'ESC PAUSE · F1 HELP',
   ];
   hud.mode.textContent = status.filter(Boolean).join(' · ');
+  if (paused) hud.pauseLevel.textContent = AI_LEVELS[aiLevel].label;
 }
 
 // stereo-pan each fighter by where they sit on screen
@@ -292,17 +306,29 @@ function frame(now: number): void {
   last = now;
   acc += dt;
   pads.poll();
+  joined = Math.max(0, joined - dt);
 
   // menu keys act once per render frame and are consumed, so they work while paused
   const key = (code: string): boolean => pressedThisTick.delete(code);
   // "go on": skips the replay, starts the rematch (consumes the press)
   const proceed = (): boolean =>
     key('KeyF') || key('Period') || key('Enter') || pads.take('attack');
+  // a second pad pressing Start while P2 is the AI takes over P2 instead of pausing
+  if (p2IsAI && pads.takeFrom(1, 'pause')) {
+    p2IsAI = false;
+    savePref('p2ai', false);
+    joined = 2.5;
+  }
   if (key('Escape') || key('KeyP') || pads.take('pause')) setPaused(!paused);
   if (key('KeyM') || pads.take('toggleAI')) {
     p2IsAI = !p2IsAI;
     savePref('p2ai', p2IsAI);
-    ai = new AIController((Math.random() * 1e9) | 0);
+    newAI();
+  }
+  if (key('KeyL') || (paused && pads.take('level'))) {
+    aiLevel = LEVEL_KEYS[(LEVEL_KEYS.indexOf(aiLevel) + 1) % LEVEL_KEYS.length];
+    savePref('ai', aiLevel);
+    newAI();
   }
   if (key('KeyR') || (paused && pads.take('reset'))) {
     newMatch();

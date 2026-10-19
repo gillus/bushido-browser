@@ -28,7 +28,7 @@ npm install
 npm run dev      # then open the printed localhost URL
 ```
 
-`npm run build` produces a small static bundle in `dist/` (~168 kB gzipped).
+`npm run build` produces a small static bundle in `dist/` (~169 kB gzipped).
 
 ## Controls
 
@@ -52,14 +52,19 @@ alongside.
 | Parry      | X (□) |
 | Stance     | RB/RT raise · LB/LT lower — or flick the right stick: up Jodan, sideways Chudan, down Gedan |
 | Toggle AI  | Back (Share) |
-| Pause      | Start (Options) — then Y (△) resets the match |
+| Pause      | Start (Options) — then Y (△) resets the match, X (□) cycles the AI level |
+| Join as P2 | Start on the second pad while P2 is the AI |
 
 Pads rumble when you're cut, killed, deflected or parried.
 
 - **Esc** / **P** — pause (lists every control); the game also pauses itself
   when the tab loses focus. **F1** — show/hide the controls bar (it hides
   itself after the first round; your choice is remembered).
-- **M** — toggle P2 between AI and human (remembered). **R** — reset the match.
+- **M** — toggle P2 between AI and human (remembered). **L** — AI level:
+  *Kohai* (easy: slow to react, often freezes, misses openings), *Senpai*
+  (normal), *Sensei* (hard: quick, parries a lot) — remembered; on a pad,
+  X (□) while paused. A second pad pressing **Start** while P2 is the AI
+  takes over P2. **R** — reset the match.
   **N** — sound on/off (remembered). Browsers keep audio locked until you click or
   press a key, and a gamepad press doesn't count.
   **H** — show the real hitboxes (body circle + attack wedge; red = kill zone, amber = glancing; remembered).

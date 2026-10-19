@@ -1,0 +1,26 @@
+{
+  "easy": {
+    "label": "KOHAI 後輩",
+    "reaction": 24,
+    "plans": { "freeze": 0.3, "guard": 0.32, "parry": 0.05, "retreat": 0.2, "trade": 0.13 },
+    "poke": [110, 170],
+    "pokeWounded": [70, 110],
+    "punishDelay": [6, 30]
+  },
+  "normal": {
+    "label": "SENPAI 先輩",
+    "reaction": 12,
+    "plans": { "guard": 0.42, "parry": 0.2, "retreat": 0.23, "trade": 0.15 },
+    "poke": [70, 130],
+    "pokeWounded": [40, 70],
+    "punishDelay": [0, 0]
+  },
+  "hard": {
+    "label": "SENSEI 先生",
+    "reaction": 6,
+    "plans": { "guard": 0.55, "parry": 0.4, "retreat": 0.05, "trade": 0 },
+    "poke": [90, 150],
+    "pokeWounded": [50, 80],
+    "punishDelay": [0, 0]
+  }
+}

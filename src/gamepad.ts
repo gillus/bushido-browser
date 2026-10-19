@@ -8,7 +8,7 @@ import { GameEvent } from './events';
 export type PadAction =
   | 'attack' | 'dash' | 'parry'
   | 'stanceUp' | 'stanceDown' | 'high' | 'mid' | 'low'
-  | 'toggleAI' | 'pause' | 'reset';
+  | 'toggleAI' | 'pause' | 'reset' | 'level';
 
 const BUTTONS: [number, PadAction][] = [
   [0, 'attack'],      // A / Cross
@@ -21,6 +21,7 @@ const BUTTONS: [number, PadAction][] = [
   [8, 'toggleAI'],    // Back / Share
   [9, 'pause'],       // Start / Options
   [3, 'reset'],       // Y / Triangle — only honoured while paused
+  [2, 'level'],       // X / Square — AI difficulty, only honoured while paused
 ];
 const DPAD = { up: 12, down: 13, left: 14, right: 15 };
 
@@ -103,6 +104,12 @@ export class GamepadInput {
     let hit = false;
     for (const s of this.slots.values()) hit = s.pressed.delete(action) || hit;
     return hit;
+  }
+
+  /** Like `take`, but only player `player`'s pad (hot-join: pad 2's Start). */
+  takeFrom(player: number, action: PadAction): boolean {
+    const pad = this.pads[player];
+    return !!pad && !!this.slots.get(pad.index)?.pressed.delete(action);
   }
 
   /** Forget consumed edges; call after each sim tick, like the keyboard set. */

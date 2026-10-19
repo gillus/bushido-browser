@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~168 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~169 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -43,12 +43,14 @@ Each future stage = a location + a dumb argument that went too far.
   Pad stance bumpers step relative to the fighter's current stance in main —
   the sim's `InputFrame` is unchanged.
 - Menu keys + match flow (2026-10-19, `main.ts`): menu keys (Esc/P pause,
-  M, R, H, N, F1) are read once per render frame and consumed
+  M, L, R, H, N, F1) are read once per render frame and consumed
   (`pressedThisTick.delete`, `pads.take`), so they work while the sim is
   held. Pad Start = pause; Y (△) resets only while paused. Blur and a hidden
   tab pause and drop held keys (a key held across alt-tab never sends its
-  keyup). M, H and F1 choices persist in `localStorage` (`bushido.*`); the
-  controls bar hides itself after the first round unless F1 chose.
+  keyup). M, L, H and F1 choices persist in `localStorage` (`bushido.*`); the
+  controls bar hides itself after the first round unless F1 chose. While
+  P2 is the AI, the SECOND pad's Start joins as P2 (`pads.takeFrom(1, …)`,
+  checked before the global pause) instead of pausing.
   **Match:** first to `MATCH_WINS` (3, `sim.ts`) clean kills; the sim sets
   `SimState.matchWinner` and holds in `'end'` instead of resetting — main
   shows the *shobu ari* banner once `roundFrame` passes `ROUND_END_FRAMES`
@@ -257,6 +259,18 @@ Each future stage = a location + a dumb argument that went too far.
   alpha test so the real wall shows), a slight tilt. Still thin non-solid
   wall decor, so they hide with their wall. Front = +z like the other
   fixtures (+z wall `rot: 180`, -x `90`, +x `-90`).
+- `src/data/ai.json` (2026-10-19) — AI difficulty levels (`AIProfile` in
+  `ai.ts`; L cycles them, pad X while paused): `reaction` (mean frames
+  before answering a wind-up), `plans` (odds of freeze/guard/parry/
+  retreat/trade — `freeze` does nothing), `poke`/`pokeWounded` ([min,
+  random extra] frames between probing cuts), `punishDelay` (frames to
+  notice a stagger/recovery opening). A `[n, 0]` range draws no rng, so
+  `normal` reproduces the pre-levels AI bit for bit — keep it that way;
+  balance numbers are normal-vs-normal. Measured vs normal (20 seeds × 6
+  min; normal's own baseline 58.3% katana / 41.7% broom): easy 31% as
+  katana, 30% as broom; hard 74% / 47%. Faster pokes made hard WORSE —
+  patience + parries is what wins. Smoke tests must pass a profile:
+  `new AIController(seed, aiJson.normal)`.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
   on round start as PS1-RPG text windows (`dialogue.ts`, styles in
   `index.html`, 2026-10-17): one speaker at a time, name tab, typewriter
