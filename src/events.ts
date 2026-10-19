@@ -28,6 +28,7 @@ export type GameEvent =
   | { type: 'landed'; who: number; end: CartEnd } // a weapon thrown at `who` stopped (a hit is a wound/kill)
   | { type: 'pickup'; who: number }               // `who` has their weapon back
   | { type: 'chain'; who: number }                // `who` turned a whiff's recovery into the next cut
+  | { type: 'feint'; who: number }                // `who` dropped their cut in the wind-up
   | { type: 'dishonor'; who: number };            // `who` broke the honor code
 
 export interface TickSnapshot {
@@ -96,6 +97,7 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
     if (f.phase !== b.phase) {
       if (b.phase === 'windup' && f.phase === 'active') out.push({ type: 'swing', who: i });
       else if (b.phase === 'recovery' && f.phase === 'windup') out.push({ type: 'chain', who: i });
+      else if (f.phase === 'feint') out.push({ type: 'feint', who: i });
       else if (f.phase === 'stagger' && f.rebound) out.push({ type: 'rebound', who: i });
       else if (f.phase === 'stagger' && b.phase !== 'lock') {
         out.push({ type: o.phase === 'parry' ? 'parried' : 'deflect', who: i });

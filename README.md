@@ -37,7 +37,7 @@ npm run dev      # then open the printed localhost URL
 | Move       | W A S D     | Arrow keys    |
 | Attack     | F           | .             |
 | Dash       | G           | ,             |
-| Parry      | Space       | /             |
+| Parry (in your wind-up: feint) | Space | / |
 | Stance     | 1 / 2 / 3   | 8 / 9 / 0     |
 | Throw cart | T           | ;             |
 | Throw weapon | hold T    | hold ;        |
@@ -51,7 +51,7 @@ alongside.
 | Move       | Left stick or D-pad (analog: half tilt = slow walk) |
 | Attack     | A (✕) |
 | Dash       | B (○) |
-| Parry      | X (□) |
+| Parry (in your wind-up: feint) | X (□) |
 | Throw cart | Y (△) |
 | Throw weapon | hold Y (△) |
 | Stance     | RB/RT raise · LB/LT lower — or flick the right stick: up Jodan, sideways Chudan, down Gedan |
@@ -100,6 +100,12 @@ Pads rumble when you're cut, killed, deflected or parried.
   whoever stepped in to punish it. Up to two follow-ups, and only off a
   clean miss: a cut that landed, was deflected or was parried can't chain.
   Guards and parries still stop it like any other cut.
+- **Kyojitsu 虚実: feints.** Press parry during your own wind-up, in the
+  first ~60% of it, and you drop the cut. The weapon comes back to guard
+  over about a quarter second (you can change stance meanwhile), and you
+  have no guard and no parry until it's there. Use it when they move their
+  guard onto your line or flinch into an early parry. If they answered
+  with a cut of their own, it lands while you're feinting.
 - Dashing has no invincibility — it saves you only if it actually carries you
   out of the weapon's reach.
 - **Weapons have a reach game.** The broom out-ranges the cardboard tube by
@@ -195,7 +201,8 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   `speed`, flight `heights` per line), the weapon throw (`hurl`: the same
   plus `pickupFrames`, the stoop to get it back), chained cuts (`chain`:
   `open` = how far into a whiff's recovery the chain can start, `windupMult`,
-  `max` follow-ups) and the honor code (`bowFrames`, and
+  `max` follow-ups), feints (`feint`: `latest` = how far into the
+  wind-up a cut can still be dropped, `recovery` = frames back to guard) and the honor code (`bowFrames`, and
   `backDeg`: how far round behind someone a hit counts as "in the back").
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
   pairs), played out in RPG text boxes before each round. New stage = new

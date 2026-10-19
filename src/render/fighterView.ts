@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CharacterDef, FighterState, Obstacle, WeaponDef } from '../sim/types';
 import {
-  bowPose, hurlPoses, JointName, kneelLegs, lockPose, movePoses, parryPose, pickupPose, Pose, staggerPose,
+  bowPose, feintPose, hurlPoses, JointName, kneelLegs, lockPose, movePoses, parryPose, pickupPose, Pose, staggerPose,
   stancePoses, throwPoses, unarmedPose,
 } from './poses';
 import { Breakable, Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
@@ -593,6 +593,10 @@ export class FighterView {
       case 'windup':   return { pose: movePoses[f.move!.line].windup, rate: f.chain > 0 ? 15 : 9 };
       case 'active':   return { pose: movePoses[f.move!.line].active, rate: 34 };
       case 'recovery': return { pose: movePoses[f.move!.line].recovery, rate: 5 };
+      case 'feint':    // reined in, then settling into the (maybe new) guard
+        return f.phaseFrame < this.feintRecovery / 2
+          ? { pose: feintPose, rate: 22 }
+          : { pose: stancePoses[f.stance], rate: 12 };
       case 'parry':    return { pose: parryPose, rate: 30 };
       case 'stagger':  return { pose: staggerPose, rate: 14 };
       case 'flinch':   return { pose: staggerPose, rate: 20 };
@@ -618,6 +622,8 @@ export class FighterView {
   throwWindup = 12;
   /** Frames a weapon throw winds up before letting go (rules.json `hurl.windup`). */
   hurlWindup = 20;
+  /** Frames a feint takes to come back to guard (rules.json `feint.recovery`). */
+  feintRecovery = 14;
 
   /** A copy of the weapon as carried (grip at the origin, along -Y), for throwing. */
   weaponClone(): THREE.Object3D {

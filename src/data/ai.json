@@ -8,7 +8,8 @@
     "punishDelay": [6, 30],
     "throws": [420, 300],
     "hurls": [150, 300],
-    "chain": 0.15
+    "chain": 0.15,
+    "feint": 0.15
   },
   "normal": {
     "label": "SENPAI 先輩",
@@ -19,7 +20,8 @@
     "punishDelay": [0, 0],
     "throws": [240, 240],
     "hurls": [90, 240],
-    "chain": 0.35
+    "chain": 0.35,
+    "feint": 0.3
   },
   "hard": {
     "label": "SENSEI 先生",
@@ -30,6 +32,7 @@
     "punishDelay": [0, 0],
     "throws": [200, 200],
     "hurls": [60, 200],
-    "chain": 0.5
+    "chain": 0.5,
+    "feint": 0.5
   }
 }

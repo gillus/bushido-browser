@@ -1,5 +1,5 @@
 import {
-  Cart, CartEnd, CartRules, ChainRules, CharacterDef, EMPTY_INPUT, FighterState, HonorRules, HurlRules, InputFrame, Line,
+  Cart, CartEnd, CartRules, ChainRules, CharacterDef, EMPTY_INPUT, FeintRules, FighterState, HonorRules, HurlRules, InputFrame, Line,
   MoveDef, MoveTable, SimState, WoundRegion, Obstacle, ObstacleState,
 } from './types';
 
@@ -84,6 +84,7 @@ export interface SimConfig {
   honor?: HonorRules;  // rules.json; absent = no bow, no dishonor
   hurl?: HurlRules;    // rules.json; absent = nobody throws their weapon
   chain?: ChainRules;  // rules.json; absent = every cut recovers in full
+  feint?: FeintRules;  // rules.json; absent = a cut once started goes through
 }
 
 function makeFighter(index: number, cfg: SimConfig): FighterState {
@@ -183,7 +184,7 @@ function updateFighter(
   // Face the opponent while free; facing is locked once an attack starts
   // (a throw keeps aiming until the cartridge — or the weapon — leaves the hand).
   if (f.phase === 'idle' || f.phase === 'stagger' || f.phase === 'bow'
-    || f.phase === 'flinch' || f.phase === 'parry'
+    || f.phase === 'flinch' || f.phase === 'parry' || f.phase === 'feint'
     || (f.phase === 'throw' && f.phaseFrame < cfg.carts!.windup)
     || (f.phase === 'hurl' && f.phaseFrame < cfg.hurl!.windup)) {
     f.facing = Math.atan2(o.pos.x - f.pos.x, o.pos.z - f.pos.z);
@@ -271,6 +272,13 @@ function updateFighter(
     case 'windup': {
       const m = f.move!;
       const windup = effWindup(f, m);
+      // a feint: parry pressed early in your own wind-up drops the cut
+      if (cfg.feint && inp.parry && f.phaseFrame < windup * cfg.feint.latest) {
+        f.phase = 'feint';
+        f.phaseFrame = 0;
+        f.move = null;
+        break;
+      }
       const lunge = m.lunge * (f.wounds.leg ? LEG_LUNGE_MULT : 1);
       if (windup - f.phaseFrame <= LUNGE_WINDUP_TAIL) {
         f.pos.x += fwd.x * lunge * TICK;
@@ -314,6 +322,13 @@ function updateFighter(
         f.move = null;
         f.chainQueued = false;
       }
+      break;
+    }
+
+    case 'feint': {
+      // bringing the weapon back to guard: open, but free to pick the next line
+      if (inp.stance) f.stance = inp.stance;
+      if (++f.phaseFrame >= cfg.feint!.recovery) { f.phase = 'idle'; f.phaseFrame = 0; }
       break;
     }
 

@@ -229,7 +229,7 @@ export const EMPTY_INPUT: InputFrame = {
 
 export type FighterPhase =
   | 'bow' | 'idle' | 'windup' | 'active' | 'recovery' | 'throw' | 'hurl' | 'pickup'
-  | 'parry' | 'stagger' | 'flinch' | 'lock' | 'dead';
+  | 'feint' | 'parry' | 'stagger' | 'flinch' | 'lock' | 'dead';
 
 /**
  * Shuriken-uchi (`src/data/rules.json` → `carts`): a thrown game cartridge
@@ -285,6 +285,18 @@ export interface ChainRules {
   open: number;
   windupMult: number;
   max: number;
+}
+
+/**
+ * Feints (`rules.json` → `feint`): parry pressed during your own wind-up,
+ * before `latest` of it has passed, abandons the cut. The weapon comes
+ * back to guard over `recovery` frames — no guard, no parry meanwhile,
+ * but you may change stance — then you're free again.
+ */
+export interface FeintRules {
+  name: string;
+  latest: number;
+  recovery: number;
 }
 
 export type CartEnd = 'hit' | 'guard' | 'parry' | 'wall' | 'prop' | 'spent';

@@ -23,6 +23,11 @@
     "windupMult": 0.85,
     "max": 2
   },
+  "feint": {
+    "name": "Kyojitsu 虚実",
+    "latest": 0.6,
+    "recovery": 14
+  },
   "honor": {
     "bowFrames": 72,
     "backDeg": 120

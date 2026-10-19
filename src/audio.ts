@@ -249,6 +249,15 @@ export class Sfx {
         this.whoosh(v(ev.who), t, 0.09, 600, 1300, 0.18);
         this.noiseHit(v(ev.who), t, 0.05, 'bandpass', 2600, 2000, 2, 0.1);
         break;
+      case 'feint': {
+        // the cut checked: a hard sneaker stamp (the kendo seme) and a squeak of grip
+        const out = v(ev.who);
+        this.noiseHit(out, t, 0.07, 'lowpass', 900, 300, 0.7, 0.3);
+        this.tone(out, t, 'sine', 110, 55, 0.09, 0.35);
+        this.tone(out, t + 0.02, 'triangle', 1700, 2300, 0.06, 0.05, 0.01);
+        this.noiseHit(out, t + 0.03, 0.05, 'bandpass', 2400, 1800, 2, 0.08);
+        break;
+      }
       case 'pickup':
         // back in hand: the grip scraped up off the floor and squeezed
         this.noiseHit(v(ev.who), t, 0.1, 'bandpass', 1400, 2200, 1.5, 0.12);

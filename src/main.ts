@@ -7,7 +7,7 @@ import rulesJson from './data/rules.json';
 import { AIController, AIProfile } from './sim/ai';
 import { createSim, MATCH_WINS, ROUND_END_FRAMES, SimConfig, stepSim, TICK } from './sim/sim';
 import {
-  CartRules, ChainRules, CharacterDef, EMPTY_INPUT, HonorRules, HurlRules, InputFrame, Line, SimState, StageDef, WeaponDef,
+  CartRules, ChainRules, CharacterDef, EMPTY_INPUT, FeintRules, HonorRules, HurlRules, InputFrame, Line, SimState, StageDef, WeaponDef,
   obstaclesFromStage,
 } from './sim/types';
 import { CartView } from './render/carts';
@@ -27,7 +27,7 @@ const characters = charactersJson as Record<string, CharacterDef>;
 const weapons = weaponsJson as unknown as Record<string, WeaponDef>;
 const stage = stageJson as unknown as StageDef;
 const BICKER = flavorJson.bicker as [string, string][];
-const rules = rulesJson as { carts: CartRules; hurl: HurlRules; chain: ChainRules; honor: HonorRules };
+const rules = rulesJson as { carts: CartRules; hurl: HurlRules; chain: ChainRules; feint: FeintRules; honor: HonorRules };
 
 const fighterChars: [CharacterDef, CharacterDef] = [characters.panzer, characters.sticchio];
 const fighterWeapons: [WeaponDef, WeaponDef] = [
@@ -49,6 +49,7 @@ const cfg: SimConfig = {
   carts: rules.carts,
   hurl: rules.hurl,
   chain: rules.chain,
+  feint: rules.feint,
   honor: rules.honor,
 };
 
@@ -175,6 +176,7 @@ for (const v of views) {
   v.breakables = smashables.flatMap((s) => s.breakables);
   v.throwWindup = rules.carts.windup;
   v.hurlWindup = rules.hurl.windup;
+  v.feintRecovery = rules.feint.recovery;
 }
 scene.add(views[0].root, views[1].root);
 const carts = new CartView(
@@ -298,7 +300,7 @@ const REMATCH_DELAY = 0.8; // s the match banner is up before a press counts
 // events worth hearing again in the replay (no footsteps or stance clicks)
 const REPLAY_SOUNDS = new Set<GameEvent['type']>([
   'swing', 'parryTry', 'clash', 'push', 'shove', 'disengage', 'deflect', 'parried',
-  'wound', 'kill', 'rebound', 'dash', 'topple', 'throw', 'cart', 'dishonor', 'hurl', 'landed', 'pickup', 'chain',
+  'wound', 'kill', 'rebound', 'dash', 'topple', 'throw', 'cart', 'dishonor', 'hurl', 'landed', 'pickup', 'chain', 'feint',
 ]);
 let hitstop = 0;
 let matchUp = -1; // seconds the match banner has been showing; -1 = hidden

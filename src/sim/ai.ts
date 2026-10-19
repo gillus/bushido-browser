@@ -33,6 +33,8 @@ export interface AIProfile {
   hurls: [number, number];
   /** Odds of chaining a whiffed cut into another line (rolled once per whiff). */
   chain: number;
+  /** Odds of feinting a cut whose line they've moved their guard onto (rolled once per cut). */
+  feint: number;
 }
 
 /** A cartridge (or a hurled weapon) on its way: the line it flies on, frames until it lands. */
@@ -64,6 +66,8 @@ export class AIController {
   private throwTimer: number;
   private hurlTimer: number;
   private chainRoll: boolean | null = null; // this whiff's roll: will we chain off it? null = not rolled
+  private feintRoll: boolean | null = null; // this cut's roll: will we feint it if they answer? null = not rolled
+  private feintTo: Line | null = null;      // the line to come back on after a feint
 
   constructor(seed: number, private profile: AIProfile) {
     this.rng = mulberry32(seed);
@@ -155,6 +159,30 @@ export class AIController {
     if (lines.length === 0) return inp;
     inp.stance = lines.includes(me.stance) ? me.stance : lines[0]; // stick with the first pick
     inp.attack = true;
+    return inp;
+  }
+
+  /**
+   * Our cut is winding up and they've moved their guard onto its line: maybe
+   * feint, and come back to guard on a line they aren't covering. Not before
+   * we could have seen it, not past the point a cut can still be dropped.
+   * (An early parry is no reason to feint — the cut lands after its window,
+   * on someone locked out.) No instant re-cut: a slow weapon swinging again
+   * straight out of a feint walks into the punish (it cost the broom ~2 pts
+   * AI-vs-AI).
+   */
+  private feintCut(sim: SimState, cfg: SimConfig, selfIndex: number, inp: InputFrame): InputFrame {
+    const me = sim.fighters[selfIndex];
+    const op = sim.fighters[1 - selfIndex];
+    const line = me.move!.line;
+    if (me.phaseFrame < this.profile.reaction >> 1
+      || me.phaseFrame >= effWindup(me, me.move!) * cfg.feint!.latest) return inp;
+    if (op.phase !== 'idle' || !op.armed || op.stance !== line) return inp;
+    if (this.feintRoll === null) this.feintRoll = this.rng() < this.profile.feint;
+    if (!this.feintRoll) return inp;
+    inp.parry = true;
+    const open = LINES.filter((l) => l !== line);
+    this.feintTo = open[Math.floor(this.rng() * open.length)];
     return inp;
   }
 
@@ -310,6 +338,13 @@ export class AIController {
       if (op.phase !== 'bow' && dist(me, op) < 3.4) inp.stance = me.stance;
       return inp;
     }
+    if (me.phase === 'windup' && cfg.feint) return this.feintCut(sim, cfg, selfIndex, inp);
+    this.feintRoll = null;
+    if (me.phase === 'feint') {
+      if (this.feintTo) inp.stance = this.feintTo;
+      return inp;
+    }
+    this.feintTo = null;
     if (me.phase === 'recovery' && cfg.chain) return this.chainCut(sim, cfg, selfIndex, inp);
     this.chainRoll = null;
     if (me.phase !== 'idle') return inp; // committed; inputs would be dropped anyway
@@ -377,6 +412,7 @@ export class AIController {
 
     // --- Punish windows ---
     const opening = op.phase === 'stagger' || op.phase === 'flinch' || op.phase === 'recovery'
+      || op.phase === 'feint' // coming back to guard: no guard yet
       || op.phase === 'throw' || op.phase === 'hurl' // past the release (before it, it's incoming)
       || op.phase === 'pickup' || !op.armed // no guard at all until it's back in hand
       || (op.phase === 'parry' && op.phaseFrame >= PARRY_WINDOW);
@@ -399,7 +435,7 @@ export class AIController {
       if (d < strikeRange && d > myMin) inp.attack = true;
       return inp;
     }
-    if (op.phase === 'recovery' || op.phase === 'throw' || op.phase === 'hurl'
+    if (op.phase === 'recovery' || op.phase === 'feint' || op.phase === 'throw' || op.phase === 'hurl'
       || op.phase === 'pickup' || !op.armed) {
       inp.moveY = d < myMin + 0.1 ? -1 : 1;
       if (d < strikeRange * 0.98 && d > myMin) inp.attack = true;

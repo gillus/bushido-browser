@@ -131,6 +131,16 @@ export const parryPose: Pose = {
   hipL: [0.16, 0, -0.05], kneeL: [0.4, 0, 0],
 };
 
+// Feint (Kyojitsu): the cut checked — weapon reined back upright in front
+// of the face, weight back off the front foot; held briefly, then guard
+export const feintPose: Pose = {
+  torso: [-0.14, 0, 0], head: [0.06, 0, 0],
+  shoulderR: [-0.95, -0.15, -0.2], elbowR: [-1.45, 0, 0], wristR: [-0.55, 0, 0],
+  shoulderL: [-0.8, 0.2, 0.25], elbowL: [-1.55, 0, 0],
+  hipR: [0.2, 0, 0.05], kneeR: [0.45, 0, 0],
+  hipL: [-0.15, 0, -0.05], kneeL: [0.2, 0, 0],
+};
+
 // Tsubazeriai: guard-to-guard, hands pulled in to the chest, weapon raised
 // so the two cross above the gap, leaning into the push
 export const lockPose: Pose = {

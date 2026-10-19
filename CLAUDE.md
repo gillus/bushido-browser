@@ -198,6 +198,27 @@ Each future stage = a location + a dumb argument that went too far.
   240 min; chain kills 46 vs 14). Levels (6 min, vs normal): easy 26% /
   30%, hard 72% / 48% (hard as broom −3 over 3 seed sets — chains punish
   its patient punishing).
+- Feints / Kyojitsu (2026-10-19, `rules.json` → `SimConfig.feint`,
+  optional — absent, 1374–983 and the chain config's 1079–831 still
+  bit-identical): `inp.parry` in `'windup'` before `effWindup × latest`
+  → phase `'feint'` (`move` cleared, no swing) for `recovery` frames:
+  no guard, no parry, stance input accepted, facing tracks; then idle.
+  Any wind-up can be feinted, chained ones too. Event `feint` (a sneaker
+  stamp + grip squeak). Render: `feintPose` (weapon reined back upright)
+  for the first half (`FighterView.feintRecovery`), then the stance pose —
+  going straight to the new stance swept the weapon through the cut and
+  read as a swing. AI (`feint` in ai.json = odds, rolled once per cut):
+  `feintCut` feints only when the opponent moves an idle guard onto its
+  line, no sooner than `reaction / 2` frames in, and comes back on another
+  line (`feintTo`, set as stance during the feint). Not off an early
+  parry: the cut lands after its window, into the lockout. No forced
+  re-cut after the feint — that walked the slow broom into the punish
+  (58.1% katana over 5 seed sets). An opponent's feint is an opening like
+  a recovery. Measured (normal, 12 min, 5 seed sets): 54.9% katana vs
+  56.4% with chains alone. Levels (6 min, vs normal): easy 26% / 26%,
+  hard 76% / 62% — hard as broom +14: its quick reaction feints off
+  guards. No AI-vs-AI kill ever lands mid-feint (the 14f recovery beats
+  every wind-up); the risk is a cut already in flight.
 - Combat resolution priority in `sim.ts`: furniture rebound → blade clash (below) → active
   parry (any line, 8-frame window) → passive stance guard (matching line,
   idle only) → glancing wound (outer reach/arc: high/mid → arm, low → leg;
@@ -370,8 +391,9 @@ Each future stage = a location + a dumb argument that went too far.
   wins. `throws` = [min, extra] frames between cartridge throws (only
   drawn when `cfg.carts` is set); `hurls` = the same for the weapon
   throw, counting only while the AI is wounded (only with `cfg.hurl`);
-  `chain` = odds of chaining off a whiff (only with `cfg.chain`). Smoke tests must pass a profile:
-  `new AIController(seed, aiJson.normal)` — and `carts`/`hurl`/`chain`/`honor` from
+  `chain` = odds of chaining off a whiff (only with `cfg.chain`);
+  `feint` = odds of feinting a cut they've guarded (only with `cfg.feint`). Smoke tests must pass a profile:
+  `new AIController(seed, aiJson.normal)` — and `carts`/`hurl`/`chain`/`feint`/`honor` from
   rules.json in the SimConfig to test the game as shipped.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
   on round start as PS1-RPG text windows (`dialogue.ts`, styles in
