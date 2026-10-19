@@ -13,7 +13,9 @@ const FLINCH_FRAMES = 24;
 // locked out and unguarded for the remainder.
 export const PARRY_WINDOW = 8;
 const PARRY_TOTAL = 34;
-const ROUND_END_FRAMES = 160;
+export const ROUND_END_FRAMES = 160;
+/** Clean kills to take the match; ai-uchi scores for nobody. */
+export const MATCH_WINS = 3;
 
 // Wound penalties
 const ARM_WINDUP_MULT = 1.35;   // slower to raise the blade
@@ -98,6 +100,7 @@ export function createSim(cfg: SimConfig): SimState {
     messageTimer: 70,
     obstacleState: freshObstacleState(cfg),
     lockBalance: 0,
+    matchWinner: null,
   };
 }
 
@@ -486,7 +489,7 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
   if (sim.roundPhase === 'end') {
     sim.roundFrame++;
     for (const f of sim.fighters) if (f.phase === 'dead') f.phaseFrame++;
-    if (sim.roundFrame >= ROUND_END_FRAMES) resetRound(sim, cfg);
+    if (sim.roundFrame >= ROUND_END_FRAMES && sim.matchWinner === null) resetRound(sim, cfg);
     return;
   }
 
@@ -571,6 +574,7 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
     } else {
       const w = kills[0] ? 1 : 0;
       sim.fighters[w].score++;
+      if (sim.fighters[w].score >= MATCH_WINS) sim.matchWinner = w;
       sim.message = `${cfg.chars[w].name.toUpperCase()} STRIKES TRUE`;
     }
     sim.messageTimer = ROUND_END_FRAMES;

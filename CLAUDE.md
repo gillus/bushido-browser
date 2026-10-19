@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~161 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~168 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -42,6 +42,28 @@ Each future stage = a location + a dumb argument that went too far.
   until a tick consumes them, same as `pressedThisTick`) merge per player.
   Pad stance bumpers step relative to the fighter's current stance in main —
   the sim's `InputFrame` is unchanged.
+- Menu keys + match flow (2026-10-19, `main.ts`): menu keys (Esc/P pause,
+  M, R, H, N, F1) are read once per render frame and consumed
+  (`pressedThisTick.delete`, `pads.take`), so they work while the sim is
+  held. Pad Start = pause; Y (△) resets only while paused. Blur and a hidden
+  tab pause and drop held keys (a key held across alt-tab never sends its
+  keyup). M, H and F1 choices persist in `localStorage` (`bushido.*`); the
+  controls bar hides itself after the first round unless F1 chose.
+  **Match:** first to `MATCH_WINS` (3, `sim.ts`) clean kills; the sim sets
+  `SimState.matchWinner` and holds in `'end'` instead of resetting — main
+  shows the *shobu ari* banner once `roundFrame` passes `ROUND_END_FRAMES`
+  and starts a new `createSim` on attack/Enter. Test harnesses that loop
+  rounds forever must clear `matchWinner` (or recreate the sim).
+  **Hitstop + kill replay** (`replay.ts`): a kill freezes the picture
+  0.18 s (a wound 0.07 s) by not ticking the sim — views keep the pose of
+  the blow. `Replay` keeps a ring of `structuredClone`d sim states; 50 ticks
+  after the kill main stops ticking the live sim and plays the last ~130
+  states through the same views (`FighterView.snap` to cut back in time,
+  view dt scaled by the playback speed: real time → 0.25× at the cut → 0.5×
+  as the body drops, ~5 s), low orbiting camera (`updateCamera`'s `orbit`),
+  letterbox, combat sounds re-diffed from the recorded states. Attack/Enter
+  skips after 0.5 s (so mashing doesn't). The live sim is only delayed,
+  never altered — determinism holds; debris just keeps settling.
 - Audio + rumble (2026-10-17): `events.ts` diffs a `snapshot()` taken before
   `stepSim` against the sim after it → `GameEvent`s (swing, deflect vs
   parried — told apart by the defender's pre-tick phase — wound, kill, dash,

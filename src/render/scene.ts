@@ -14,7 +14,8 @@ export interface SceneBundle {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
-  updateCamera: (a: FighterState, b: FighterState, dt: number) => void;
+  /** `orbit` (radians) switches to the low replay camera, swung that far round the pair. */
+  updateCamera: (a: FighterState, b: FighterState, dt: number, orbit?: number) => void;
   updateProps: (sim: SimState) => void;
   smashables: Smashable[]; // set dressing that breaks: shop window, kiosk, arcade, display table
 }
@@ -295,7 +296,9 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
   const desired = new THREE.Vector3();
   const perp = new THREE.Vector3();
 
-  const updateCamera = (a: FighterState, b: FighterState, dt: number): void => {
+  const UP = new THREE.Vector3(0, 1, 0);
+
+  const updateCamera = (a: FighterState, b: FighterState, dt: number, orbit?: number): void => {
     const midX = (a.pos.x + b.pos.x) / 2;
     const midZ = (a.pos.z + b.pos.z) / 2;
     const dx = b.pos.x - a.pos.x;
@@ -307,12 +310,14 @@ export function createScene(stage: StageDef, container: HTMLElement): SceneBundl
     const toCam = new THREE.Vector3(camera.position.x - midX, 0, camera.position.z - midZ);
     if (perp.dot(toCam) < 0) perp.negate();
 
-    const back = 2.8 + d * 0.85;
-    desired.set(midX + perp.x * back, 1.55 + d * 0.14, midZ + perp.z * back);
+    const cine = orbit !== undefined; // replay: in close and low, drifting round
+    if (cine) perp.applyAxisAngle(UP, orbit);
+    const back = cine ? 2.3 + d * 0.6 : 2.8 + d * 0.85;
+    desired.set(midX + perp.x * back, cine ? 1.15 + d * 0.1 : 1.55 + d * 0.14, midZ + perp.z * back);
 
-    const k = 1 - Math.exp(-4 * dt);
+    const k = 1 - Math.exp(-(cine ? 8 : 4) * dt);
     camera.position.lerp(desired, k);
-    camTarget.lerp(new THREE.Vector3(midX, 1.0, midZ), k);
+    camTarget.lerp(new THREE.Vector3(midX, cine ? 0.9 : 1.0, midZ), k);
     camera.lookAt(camTarget);
     // rim light from the far side of the fighters, high and behind
     rim.position.set(camTarget.x - perp.x * 6, 4.5, camTarget.z - perp.z * 6);

@@ -93,6 +93,56 @@
       bottom: 14px; left: 24px; right: 24px; font-size: 12px;
       color: #55705f; letter-spacing: 1px;
     }
+    /* pause: the referee's "matte" — the fight holds, the controls are listed */
+    #pause {
+      inset: 0; z-index: 20; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+      background: rgba(4, 8, 6, 0.72); text-align: center;
+    }
+    #pause[hidden], #match[hidden] { display: none; }
+    #pause h1 {
+      font-size: 46px; letter-spacing: 10px; color: #e8d8b8;
+      text-shadow: 0 0 18px rgba(200, 60, 40, 0.9);
+    }
+    #pause .sub { font-size: 13px; letter-spacing: 4px; color: #7fc9a0; }
+    #pause table { border-collapse: collapse; font-size: 13px; }
+    #pause th { color: #7fc9a0; font-weight: normal; letter-spacing: 2px; padding: 0 14px 6px; }
+    #pause td { padding: 3px 14px; color: #cfe8d8; }
+    #pause td:first-child { color: #6a8a78; text-align: right; }
+    #pause .menu { font-size: 13px; line-height: 1.9; color: #cfe8d8; }
+    #pause .menu b { color: #e8d8b8; }
+    .pips { letter-spacing: 2px; }
+    /* match end: the referee's "shobu ari" — the match is decided */
+    #match {
+      inset: 0; z-index: 15; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 14px;
+      background: radial-gradient(ellipse at 50% 45%, rgba(4, 8, 6, 0.35), rgba(4, 8, 6, 0.8));
+      text-align: center;
+    }
+    #match h1 {
+      font-size: 54px; letter-spacing: 12px; color: #e8d8b8;
+      text-shadow: 0 0 22px rgba(200, 60, 40, 0.95);
+    }
+    #match .who { font-size: 20px; letter-spacing: 6px; }
+    #match .score { font-size: 30px; letter-spacing: 6px; color: #e8d8b8; }
+    #match .sub { font-size: 13px; letter-spacing: 3px; color: #7fc9a0; margin-top: 10px; }
+    /* kill replay: letterbox, a REC-style tag, the live HUD stands aside */
+    #replay { inset: 0; display: none; }
+    body.replay #replay { display: block; }
+    body.replay #msg, body.replay #lock, body.replay #dialogue, body.replay #help, body.replay #mode,
+    body.paused #dialogue, body.paused #help, body.paused #msg { display: none; }
+    #replay .bar { position: absolute; left: 0; right: 0; height: 9vh; background: #000; }
+    #replay .bar.top { top: 0; }
+    #replay .bar.bottom { bottom: 0; }
+    #replay .tag {
+      position: absolute; top: calc(9vh + 14px); left: 24px;
+      font-size: 16px; letter-spacing: 4px; color: #e8d8b8;
+    }
+    #replay .tag::before { content: '● '; color: #d03a2a; animation: dlg-blink 1s steps(2, start) infinite; }
+    #replay .skip {
+      position: absolute; bottom: calc(9vh + 12px); right: 24px;
+      font-size: 12px; letter-spacing: 2px; color: #6a8a78;
+    }
   </style>
 </head>
 <body>
@@ -104,11 +154,38 @@
   <div id="lock" class="hud"><div class="bar"><div class="mark"></div></div>ATTACK TO PUSH</div>
   <div id="mode" class="hud"></div>
   <div id="dialogue" class="hud"></div>
+  <div id="replay" class="hud">
+    <div class="bar top"></div><div class="bar bottom"></div>
+    <div class="tag">REPLAY 再生</div>
+    <div class="skip">ATTACK / ENTER TO SKIP</div>
+  </div>
+  <div id="match" class="hud" hidden>
+    <h1>SHOBU ARI 勝負あり</h1>
+    <div class="who"></div>
+    <div class="score"></div>
+    <div class="sub">ATTACK / ENTER FOR A REMATCH</div>
+  </div>
+  <div id="pause" class="hud" hidden>
+    <h1>MATTE 待て</h1>
+    <div class="sub">THE DUEL WAITS</div>
+    <table>
+      <tr><th></th><th>P1</th><th>P2</th><th>PAD</th></tr>
+      <tr><td>move</td><td>W A S D</td><td>arrows</td><td>stick / d-pad</td></tr>
+      <tr><td>attack</td><td>F</td><td>.</td><td>A (✕)</td></tr>
+      <tr><td>dash</td><td>G</td><td>,</td><td>B (○)</td></tr>
+      <tr><td>parry</td><td>SPACE</td><td>/</td><td>X (□)</td></tr>
+      <tr><td>stance</td><td>1 2 3</td><td>8 9 0</td><td>LB / RB · flick right stick</td></tr>
+    </table>
+    <div class="menu">
+      <b>ESC · P · START</b> resume &nbsp;·&nbsp; <b>R · Y (△)</b> reset match &nbsp;·&nbsp; <b>M · BACK</b> toggle AI<br>
+      <b>N</b> sound &nbsp;·&nbsp; <b>H</b> hitboxes &nbsp;·&nbsp; <b>F1</b> controls bar
+    </div>
+  </div>
   <div id="help" class="hud">
     P1: WASD move &middot; F attack &middot; G dash &middot; SPACE parry &middot; 1/2/3 stance &nbsp;&nbsp;|&nbsp;&nbsp;
     P2: arrows &middot; . attack &middot; , dash &middot; / parry &middot; 8/9/0 stance<br>
     PAD: stick move &middot; A attack &middot; B dash &middot; X parry &middot; LB/RB stance (or flick right stick) &nbsp;&nbsp;|&nbsp;&nbsp;
-    M toggle AI &middot; R reset &middot; N sound<br>
+    M toggle AI &middot; R reset &middot; N sound &middot; ESC pause &middot; F1 hide this<br>
     match your stance to their cut to deflect &mdash; clean hits kill, glancing hits maim &mdash; there is no steel
   </div>
   <script type="module" src="/src/main.ts"></script>

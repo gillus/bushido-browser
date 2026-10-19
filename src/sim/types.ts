@@ -261,4 +261,7 @@ export interface SimState {
   /** Tsubazeriai push balance while both fighters are in 'lock':
    *  +1 = fighter 0 overpowers, -1 = fighter 1 does. 0 otherwise. */
   lockBalance: number;
+  /** Set once a fighter reaches `MATCH_WINS`: the match is over and the
+   *  sim holds on the final corpse instead of starting another round. */
+  matchWinner: number | null;
 }

@@ -28,7 +28,7 @@ npm install
 npm run dev      # then open the printed localhost URL
 ```
 
-`npm run build` produces a small static bundle in `dist/` (~161 kB gzipped).
+`npm run build` produces a small static bundle in `dist/` (~168 kB gzipped).
 
 ## Controls
 
@@ -51,14 +51,18 @@ alongside.
 | Dash       | B (○) |
 | Parry      | X (□) |
 | Stance     | RB/RT raise · LB/LT lower — or flick the right stick: up Jodan, sideways Chudan, down Gedan |
-| Toggle AI / reset | Back (Share) / Start (Options) |
+| Toggle AI  | Back (Share) |
+| Pause      | Start (Options) — then Y (△) resets the match |
 
 Pads rumble when you're cut, killed, deflected or parried.
 
-- **M** — toggle P2 between AI and human. **R** — reset the match.
+- **Esc** / **P** — pause (lists every control); the game also pauses itself
+  when the tab loses focus. **F1** — show/hide the controls bar (it hides
+  itself after the first round; your choice is remembered).
+- **M** — toggle P2 between AI and human (remembered). **R** — reset the match.
   **N** — sound on/off (remembered). Browsers keep audio locked until you click or
   press a key, and a gamepad press doesn't count.
-  **H** — show the real hitboxes (body circle + attack wedge; red = kill zone, amber = glancing).
+  **H** — show the real hitboxes (body circle + attack wedge; red = kill zone, amber = glancing; remembered).
 - Movement is opponent-relative: forward/back closes/opens distance, left/right circles.
 
 ## How to not die
@@ -104,6 +108,10 @@ Pads rumble when you're cut, killed, deflected or parried.
 - Simultaneous clean hits on *different* lines pass each other: an
   *ai-uchi*. Both fall, nobody scores. They would both insist this proves
   their point.
+- **First to three clean kills takes the match** (◆◆◇ by the names).
+  Every kill lands with a beat of hitstop and then a slow-motion replay of
+  the cut (attack or Enter skips it); the last one ends on *shobu ari* —
+  attack or Enter for a rematch.
 
 ## Editing content (the "text-based editor")
 

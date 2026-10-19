@@ -602,6 +602,12 @@ export class FighterView {
   breakables: Breakable[] = [];
   private shadowPos = new THREE.Vector3();
 
+  /** Jump straight to `f`'s pose (a replay cutting back in time), no blending. */
+  snap(f: FighterState, liveObstacles?: Obstacle[]): void {
+    for (const d of this.danglers) d.live = false; // reseed rather than spring across the cut
+    this.update(f, 1, liveObstacles);
+  }
+
   update(f: FighterState, dt: number, liveObstacles?: Obstacle[]): void {
     this.liveObstacles = liveObstacles ?? this.obstacles;
     this.time += dt;
