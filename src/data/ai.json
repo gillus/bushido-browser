@@ -6,7 +6,8 @@
     "poke": [110, 170],
     "pokeWounded": [70, 110],
     "punishDelay": [6, 30],
-    "throws": [420, 300]
+    "throws": [420, 300],
+    "hurls": [150, 300]
   },
   "normal": {
     "label": "SENPAI 先輩",
@@ -15,7 +16,8 @@
     "poke": [70, 130],
     "pokeWounded": [40, 70],
     "punishDelay": [0, 0],
-    "throws": [240, 240]
+    "throws": [240, 240],
+    "hurls": [90, 240]
   },
   "hard": {
     "label": "SENSEI 先生",
@@ -24,6 +26,7 @@
     "poke": [90, 150],
     "pokeWounded": [50, 80],
     "punishDelay": [0, 0],
-    "throws": [200, 200]
+    "throws": [200, 200],
+    "hurls": [60, 200]
   }
 }

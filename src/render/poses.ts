@@ -187,3 +187,41 @@ export const throwPoses: { windup: Pose; release: Pose } = {
     ...lungeLegs,
   },
 };
+
+// Tachi-nage: the weapon itself goes, overhand, like a spear off the
+// shoulder — the free hand points the way
+export const hurlPoses: { windup: Pose; release: Pose } = {
+  // drawn back over the right shoulder, the weapon trailing behind
+  windup: {
+    torso: [-0.15, 0.45, 0], head: [0.05, -0.4, 0],
+    shoulderR: [-2.75, -0.35, -0.2], elbowR: [-1.1, 0, 0], wristR: [1.0, 0, 0],
+    shoulderL: [-1.45, 0.25, 0.25], elbowL: [-0.2, 0, 0],
+    ...guardLegs,
+  },
+  // and flung: arm through and down, the whole body following it in
+  release: {
+    torso: [0.42, -0.35, 0], head: [-0.2, 0.3, 0],
+    shoulderR: [-1.15, 0.1, -0.15], elbowR: [-0.05, 0, 0], wristR: [-0.3, 0, 0],
+    shoulderL: [-0.4, 0.5, 0.3], elbowL: [-0.5, 0, 0],
+    ...lungeLegs,
+  },
+};
+
+// Empty-handed (the weapon's been thrown): fists up, still squared up to
+// the opponent — the deadpan has no unarmed technique, just resolve
+export const unarmedPose: Pose = {
+  torso: [0.14, 0, 0], head: [-0.06, 0, 0],
+  shoulderR: [-1.0, -0.2, -0.3], elbowR: [-1.7, 0, 0], wristR: [0, 0, 0],
+  shoulderL: [-1.15, 0.2, 0.3], elbowL: [-1.65, 0, 0],
+  ...guardLegs,
+};
+
+// Stooping for the dropped weapon: bent over, knees bent (the view drops
+// the pelvis), the right hand down at the floor
+export const pickupPose: Pose = {
+  torso: [1.2, 0, 0], head: [-0.55, 0, 0],
+  shoulderR: [-0.35, -0.1, -0.15], elbowR: [-0.1, 0, 0], wristR: [-0.3, 0, 0],
+  shoulderL: [-0.15, 0.2, 0.3], elbowL: [-0.45, 0, 0],
+  hipR: [-1.0, 0, 0.06], kneeR: [1.35, 0, 0],
+  hipL: [-0.35, 0, -0.06], kneeL: [0.9, 0, 0],
+};

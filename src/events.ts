@@ -24,6 +24,9 @@ export type GameEvent =
   | { type: 'topple'; prop: number }
   | { type: 'throw'; who: number }                // `who` let a cartridge go
   | { type: 'cart'; who: number; end: CartEnd }   // a cartridge aimed at `who` stopped
+  | { type: 'hurl'; who: number }                 // `who` threw their weapon
+  | { type: 'landed'; who: number; end: CartEnd } // a weapon thrown at `who` stopped (a hit is a wound/kill)
+  | { type: 'pickup'; who: number }               // `who` has their weapon back
   | { type: 'dishonor'; who: number };            // `who` broke the honor code
 
 export interface TickSnapshot {
@@ -32,7 +35,7 @@ export interface TickSnapshot {
   lockBalance: number;
   fighters: {
     phase: FighterPhase; stance: Line; dashLeft: number; step: number;
-    wounds: Record<WoundRegion, boolean>; dishonored: boolean;
+    wounds: Record<WoundRegion, boolean>; dishonored: boolean; armed: boolean;
   }[];
   downs: boolean[];
   carts: (CartEnd | null)[];
@@ -52,7 +55,7 @@ export function snapshot(sim: SimState): TickSnapshot {
     lockBalance: sim.lockBalance,
     fighters: sim.fighters.map((f) => ({
       phase: f.phase, stance: f.stance, dashLeft: f.dashLeft,
-      step: stepIndex(f.walkCycle), wounds: { ...f.wounds }, dishonored: f.dishonored,
+      step: stepIndex(f.walkCycle), wounds: { ...f.wounds }, dishonored: f.dishonored, armed: f.armed,
     })),
     downs: sim.obstacleState.map((s) => s.down),
     carts: sim.carts.map((c) => c.end),
@@ -62,10 +65,10 @@ export function snapshot(sim: SimState): TickSnapshot {
 export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
   const out: GameEvent[] = [];
   if (before.frame === 0) out.push({ type: 'roundStart' }); // fresh sim (load / R)
-  // cartridges still in the air when the round ends land meanwhile
+  // cartridges (and weapons) still in the air when the round ends land meanwhile
   sim.carts.forEach((c, i) => {
-    if (i >= before.carts.length) out.push({ type: 'throw', who: c.owner });
-    if (c.end && !before.carts[i]) out.push({ type: 'cart', who: 1 - c.owner, end: c.end });
+    if (i >= before.carts.length) out.push({ type: c.kind ? 'hurl' : 'throw', who: c.owner });
+    if (c.end && !before.carts[i]) out.push({ type: c.kind ? 'landed' : 'cart', who: 1 - c.owner, end: c.end });
   });
   if (before.roundPhase === 'end') {
     // a round reset swaps in fresh fighters; nothing else to diff on that tick
@@ -102,6 +105,7 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
       if (f.wounds[region] && !b.wounds[region]) out.push({ type: 'wound', who: i, region });
     }
     if (f.dishonored && !b.dishonored) out.push({ type: 'dishonor', who: i });
+    if (f.armed && !b.armed) out.push({ type: 'pickup', who: i });
     if (f.stance !== b.stance) out.push({ type: 'stance', who: i });
     if (f.dashLeft > 0 && b.dashLeft <= 0) out.push({ type: 'dash', who: i });
     if (f.phase !== 'dead' && stepIndex(f.walkCycle) > b.step) {

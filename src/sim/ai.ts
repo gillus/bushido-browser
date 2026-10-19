@@ -29,9 +29,11 @@ export interface AIProfile {
   punishDelay: [number, number];
   /** Frames between cartridge throws: [min, random extra]. */
   throws: [number, number];
+  /** Frames, once wounded, before hurling the weapon as a last resort: [min, random extra]. */
+  hurls: [number, number];
 }
 
-/** A cartridge on its way: the line it flies on, frames until it lands. */
+/** A cartridge (or a hurled weapon) on its way: the line it flies on, frames until it lands. */
 interface CartThreat { line: Line; eta: number; }
 
 const PLAN_ORDER: ThreatPlan[] = ['freeze', 'guard', 'parry', 'retreat', 'trade'];
@@ -58,10 +60,12 @@ export class AIController {
   private cartPlan: ThreatPlan = 'guard';
   private cartPlanDone = false;
   private throwTimer: number;
+  private hurlTimer: number;
 
   constructor(seed: number, private profile: AIProfile) {
     this.rng = mulberry32(seed);
     this.throwTimer = profile.throws[0];
+    this.hurlTimer = profile.hurls[0];
   }
 
   /** Roll an answer to a threat from the profile's odds. */
@@ -81,14 +85,13 @@ export class AIController {
    * will meet our body.
    */
   private incomingCart(sim: SimState, cfg: SimConfig, selfIndex: number): CartThreat | null {
-    const rules = cfg.carts;
-    if (!rules) return null;
+    if (!cfg.carts && !cfg.hurl) return null;
     const me = sim.fighters[selfIndex];
     const op = sim.fighters[1 - selfIndex];
-    const perTick = rules.speed * TICK;
-    if (op.phase === 'throw' && op.phaseFrame < rules.windup) {
-      const flight = Math.max(0, dist(me, op) - CART_FROM - BODY_RADIUS) / perTick;
-      return { line: op.stance, eta: rules.windup - op.phaseFrame + flight };
+    const winding = op.phase === 'throw' ? cfg.carts : op.phase === 'hurl' ? cfg.hurl : undefined;
+    if (winding && op.phaseFrame <= winding.windup) { // == windup: it leaves the hand this tick
+      const flight = Math.max(0, dist(me, op) - CART_FROM - BODY_RADIUS) / (winding.speed * TICK);
+      return { line: op.stance, eta: winding.windup - op.phaseFrame + flight };
     }
     for (const c of sim.carts) {
       if (c.end || c.owner === selfIndex) continue;
@@ -96,9 +99,56 @@ export class AIController {
       const along = rx * c.dx + rz * c.dz;
       const off = Math.abs(rx * c.dz - rz * c.dx);
       if (along < 0 || off > BODY_RADIUS + 0.15) continue; // gone past, or not heading for us
+      const perTick = (c.kind ? cfg.hurl! : cfg.carts!).speed * TICK;
       return { line: c.line, eta: Math.max(0, along - BODY_RADIUS) / perTick };
     }
     return null;
+  }
+
+  /**
+   * Weapon thrown and gone: get it back. Walk (or dash, from afar) to
+   * where it lies; back off while it's still in the air or they're
+   * swinging at us — there's no guard without it.
+   */
+  private retrieve(sim: SimState, cfg: SimConfig, selfIndex: number, inp: InputFrame): InputFrame {
+    const me = sim.fighters[selfIndex];
+    const op = sim.fighters[1 - selfIndex];
+    const w = me.weaponAt;
+    const opMove = cfg.moves[1 - selfIndex][op.stance];
+    const swinging = op.phase === 'windup' || op.phase === 'active';
+    if (!w || (swinging && dist(me, op) < opMove.reach + 0.6)) {
+      inp.moveY = -1;
+      inp.dash = swinging;
+      return inp;
+    }
+    const wx = w.x - me.pos.x, wz = w.z - me.pos.z;
+    const len = Math.hypot(wx, wz) || 1;
+    // world direction into our facing frame (facing tracks the opponent)
+    inp.moveY = (wx * Math.sin(me.facing) + wz * Math.cos(me.facing)) / len;
+    inp.moveX = (wx * Math.cos(me.facing) - wz * Math.sin(me.facing)) / len;
+    inp.dash = len > 2.5;
+    return inp;
+  }
+
+  /**
+   * Would a weapon (or cartridge) thrown on `line` from here fly clear of
+   * the furniture to the opponent? Mirrors the sim's flight test.
+   */
+  private clearShot(sim: SimState, cfg: SimConfig, selfIndex: number, height: number): boolean {
+    const me = sim.fighters[selfIndex];
+    const op = sim.fighters[1 - selfIndex];
+    const d = dist(me, op);
+    const dx = (op.pos.x - me.pos.x) / d, dz = (op.pos.z - me.pos.z) / d;
+    for (let r = CART_FROM; r < d - BODY_RADIUS; r += 0.1) {
+      const x = me.pos.x + dx * r, z = me.pos.z + dz * r;
+      for (let i = 0; i < cfg.obstacles.length; i++) {
+        const ob = cfg.obstacles[i];
+        if (ob.knockable || sim.obstacleState[i].down || ob.y1 < height) continue;
+        const ox = x - ob.x, oz = z - ob.z;
+        if (Math.abs(ox * ob.c - oz * ob.s) <= ob.halfW && Math.abs(ox * ob.s + oz * ob.c) <= ob.halfD) return false;
+      }
+    }
+    return true;
   }
 
   /** Answer an incoming cartridge (the plan is rolled once per cart). */
@@ -233,6 +283,7 @@ export class AIController {
       return inp;
     }
     if (me.phase !== 'idle') return inp; // committed; inputs would be dropped anyway
+    if (!me.armed) return this.retrieve(sim, cfg, selfIndex, inp);
 
     const d = dist(me, op);
     const myMove = cfg.moves[selfIndex][me.stance];
@@ -296,7 +347,8 @@ export class AIController {
 
     // --- Punish windows ---
     const opening = op.phase === 'stagger' || op.phase === 'flinch' || op.phase === 'recovery'
-      || op.phase === 'throw' // past the release (before it, it's an incoming cart)
+      || op.phase === 'throw' || op.phase === 'hurl' // past the release (before it, it's incoming)
+      || op.phase === 'pickup' || !op.armed // no guard at all until it's back in hand
       || (op.phase === 'parry' && op.phaseFrame >= PARRY_WINDOW);
     if (!opening) this.openingWait = -1;
     else {
@@ -317,7 +369,8 @@ export class AIController {
       if (d < strikeRange && d > myMin) inp.attack = true;
       return inp;
     }
-    if (op.phase === 'recovery' || op.phase === 'throw') {
+    if (op.phase === 'recovery' || op.phase === 'throw' || op.phase === 'hurl'
+      || op.phase === 'pickup' || !op.armed) {
       inp.moveY = d < myMin + 0.1 ? -1 : 1;
       if (d < strikeRange * 0.98 && d > myMin) inp.attack = true;
       else if (d < 3.0 && d > myMin && this.rng() < 0.3) inp.dash = true;
@@ -367,6 +420,21 @@ export class AIController {
         this.throwTimer = this.frames(this.profile.throws);
       } else {
         this.throwTimer = 20;
+      }
+    }
+
+    // Wounded and out of their reach: the last resort — hurl the weapon,
+    // on a line they aren't guarding, when nothing tall is in the way
+    const hurl = cfg.hurl;
+    if (!inp.attack && !inp.throw && hurl && (me.wounds.arm || me.wounds.leg) && --this.hurlTimer <= 0) {
+      const theirReach = oppMove.reach + oppMove.lunge * 0.12;
+      const open = LINES.filter((l) => l !== op.stance && this.clearShot(sim, cfg, selfIndex, hurl.heights[l]));
+      if (d > theirReach + 0.3 && d < 5 && open.length > 0) {
+        inp.stance = open[Math.floor(this.rng() * open.length)];
+        inp.hurl = true;
+        this.hurlTimer = this.frames(this.profile.hurls);
+      } else {
+        this.hurlTimer = 20;
       }
     }
 

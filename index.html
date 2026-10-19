@@ -24,6 +24,7 @@
     .carts { font-size: 12px; color: #e8d8b8; letter-spacing: 1px; }
     .carts .spent { color: #4a5a50; }
     .shame { font-size: 12px; color: #f08040; letter-spacing: 2px; }
+    .unarmed { font-size: 12px; color: #e8d8b8; letter-spacing: 2px; }
     .weapon { font-size: 12px; color: #8a9a90; letter-spacing: 1px; }
     #msg {
       top: 22%; left: 0; right: 0; text-align: center;
@@ -179,10 +180,12 @@
       <tr><td>parry</td><td>SPACE</td><td>/</td><td>X (□)</td></tr>
       <tr><td>stance</td><td>1 2 3</td><td>8 9 0</td><td>LB / RB · flick right stick</td></tr>
       <tr><td>throw cart</td><td>T</td><td>;</td><td>Y (△)</td></tr>
+      <tr><td>throw weapon</td><td>hold T</td><td>hold ;</td><td>hold Y (△)</td></tr>
     </table>
     <div class="menu">
       Each round opens with a bow (<b>REI 礼</b>) &mdash; any input ends yours. Hitting an opponent<br>
-      still bowing, or in the back, is <b>DISHONOR 不名誉</b>: your kill that round scores nothing.
+      still bowing, or in the back, is <b>DISHONOR 不名誉</b>: your kill that round scores nothing.<br>
+      A thrown weapon kills like a cut &mdash; miss, and you're unarmed until you walk back over it.
     </div>
     <div class="menu">
       <b>ESC · P · START</b> resume &nbsp;·&nbsp; <b>R · Y (△)</b> reset match &nbsp;·&nbsp; <b>M · BACK</b> toggle AI<br>
@@ -195,7 +198,7 @@
     P2: arrows &middot; . attack &middot; , dash &middot; / parry &middot; 8/9/0 stance &middot; ; throw<br>
     PAD: stick A B X Y &middot; LB/RB or right stick stance &nbsp;&nbsp;|&nbsp;&nbsp;
     M toggle AI &middot; L AI level &middot; R reset &middot; N sound &middot; ESC pause &middot; F1 hide this<br>
-    match your stance to their cut to deflect &mdash; clean hits kill, glancing hits maim &mdash; there is no steel
+    match your stance to their cut to deflect &mdash; clean hits kill, glancing hits maim &mdash; there is no steel &mdash; hold throw to hurl your weapon
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

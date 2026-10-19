@@ -8,6 +8,15 @@
     "range": 9,
     "heights": { "high": 1.5, "mid": 1.1, "low": 0.4 }
   },
+  "hurl": {
+    "name": "Tachi-nage 太刀投げ",
+    "windup": 20,
+    "recovery": 24,
+    "speed": 15,
+    "range": 9,
+    "pickupFrames": 22,
+    "heights": { "high": 1.5, "mid": 1.1, "low": 0.4 }
+  },
   "honor": {
     "bowFrames": 72,
     "backDeg": 120

@@ -20,7 +20,7 @@ const BUTTONS: [number, PadAction][] = [
   [6, 'stanceDown'],  // LT / L2
   [8, 'toggleAI'],    // Back / Share
   [9, 'pause'],       // Start / Options
-  [3, 'throw'],       // Y / Triangle — throw a cartridge…
+  [3, 'throw'],       // Y / Triangle — tap: throw a cartridge, hold: hurl the weapon…
   [3, 'reset'],       // …and, only while paused, reset the match
   [2, 'level'],       // X / Square — AI difficulty, only honoured while paused
 ];
@@ -40,6 +40,7 @@ export interface PadRead {
   moveX: number;
   moveY: number;
   pressed: Set<PadAction>;
+  throwHeld: boolean; // Y / Triangle down right now (holding it hurls the weapon)
 }
 
 function deadzone(x: number, y: number): [number, number] {
@@ -97,6 +98,7 @@ export class GamepadInput {
       moveX: Math.max(-1, Math.min(1, x)),
       moveY: -Math.max(-1, Math.min(1, y)), // stick up (-y) = toward the opponent
       pressed: this.slots.get(pad.index)!.pressed,
+      throwHeld: btn(3),
     };
   }
 

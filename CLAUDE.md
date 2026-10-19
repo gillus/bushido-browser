@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~173 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~175 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -46,7 +46,9 @@ Each future stage = a location + a dumb argument that went too far.
   M, L, R, H, N, F1) are read once per render frame and consumed
   (`pressedThisTick.delete`, `pads.take`), so they work while the sim is
   held. Pad Start = pause; Y (△) resets only while paused (in play it
-  throws a cartridge). Blur and a hidden
+  throws: tap = cartridge, on release; held 18 ticks = the weapon —
+  `ThrowButton` in main, per player, maps a key/pad hold onto
+  `InputFrame.throw`/`.hurl`, so the sim stays edge-triggered). Blur and a hidden
   tab pause and drop held keys (a key held across alt-tab never sends its
   keyup). M, L, H and F1 choices persist in `localStorage` (`bushido.*`); the
   controls bar hides itself after the first round unless F1 chose. While
@@ -136,7 +138,44 @@ Each future stage = a location + a dumb argument that went too far.
   dash / walk through it). Measured with both on (20 seeds; normal 12
   min, levels 6 min): normal-vs-normal 54.8% katana (from 58.3 — rounds
   ~18% fewer from the bow; ~0.4 throws per round, about half hit); easy
-  28% / 30%, hard 74% / 52% (katana / broom vs normal).
+  28% / 30%, hard 74% / 52% (katana / broom vs normal). Then 53.8% once
+  the AI stopped going blind on the release tick (see below; cart hits
+  halved).
+- Weapon throw / Tachi-nage (2026-10-19, `rules.json` → `SimConfig.hurl`,
+  optional like the rest — absent, 1374–983 still): `InputFrame.hurl` →
+  phase `'hurl'` (aims through `windup`, releases at it). The weapon is a
+  `Cart` with `kind: 'weapon'` in `SimState.carts`, flown by the same
+  `updateCarts` with `hurl` speed/heights and a bigger radius
+  (`WEAPON_RADIUS`); guard on the line / parry / lock / furniture stop it
+  as for carts, but a hit is a blade hit: kill, or a glancing wound when
+  the body is more than `WEAPON_GLANCE_FRAC` of the hit radius off its
+  path (repeat region = kill); honor applies; a kill ends the round from
+  inside `updateCarts` (`endRound`, shared with blade kills; `wound()`
+  likewise). `FighterState.armed` goes false at release; when it stops,
+  `weaponRest` puts `FighterState.weaponAt` where it lies (knocked back
+  1 m + aside off a guard/parry, off furniture/walls, at the victim's
+  feet; clamped into the room, pushed out of solid boxes). Unarmed: no
+  cut, parry, hurl or stance guard (carts still go); walking within
+  `PICKUP_RADIUS` stoops (phase `'pickup'`, `pickupFrames`, open), then
+  armed again. Everything resets per round. Events: `hurl`, `landed`
+  (`end`; a hit is heard as the wound/kill), `pickup`. Render:
+  `hurled.ts` (`HurlView`, a `FighterView.weaponClone()` per fighter,
+  tumbling end over end, then hopping to `weaponAt` — all a function of
+  the shown state's frame, so the replay rewinds it — and lifted into
+  `rightHand()` through the stoop); the wristR skin hides while unarmed
+  (so the corpse's clone is empty-handed too); `hurlPoses`,
+  `unarmedPose` (fists), `pickupPose` + `PICKUP_HIP_Y`. HUD `無刀
+  UNARMED`. AI (`hurls` in ai.json, counted down only while wounded):
+  hurls on an unguarded line from outside their reach when the flight
+  is clear of tall furniture (`clearShot`); unarmed, `retrieve` walks or
+  dashes to `weaponAt` and backs off from swings; an unarmed or
+  stooping opponent is an opening. Fixed with it: the AI saw neither a
+  wind-up nor a projectile on the release tick (`phaseFrame == windup`)
+  and treated the thrower as an opening — now `<=`. Measured (20 seeds ×
+  12 min, normal): 54.2% katana; ~15 hurls in 240 min, all by the broom
+  (the katana is rarely out of the broom's reach); most are blocked and
+  the thrower dies unarmed — as intended for a last resort. Levels
+  (6 min, vs normal): easy 28% / 32%, hard 72% / 52%.
 - Combat resolution priority in `sim.ts`: furniture rebound → blade clash (below) → active
   parry (any line, 8-frame window) → passive stance guard (matching line,
   idle only) → glancing wound (outer reach/arc: high/mid → arm, low → leg;
@@ -307,8 +346,9 @@ Each future stage = a location + a dumb argument that went too far.
   easy 31% as katana, 30% as broom; hard 74% / 47% (with carts + honor:
   see above). Faster pokes made hard WORSE — patience + parries is what
   wins. `throws` = [min, extra] frames between cartridge throws (only
-  drawn when `cfg.carts` is set). Smoke tests must pass a profile:
-  `new AIController(seed, aiJson.normal)` — and `carts`/`honor` from
+  drawn when `cfg.carts` is set); `hurls` = the same for the weapon
+  throw, counting only while the AI is wounded (only with `cfg.hurl`). Smoke tests must pass a profile:
+  `new AIController(seed, aiJson.normal)` — and `carts`/`hurl`/`honor` from
   rules.json in the SimConfig to test the game as shipped.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
   on round start as PS1-RPG text windows (`dialogue.ts`, styles in

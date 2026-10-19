@@ -214,6 +214,41 @@ export class Sfx {
         }
         break;
       }
+      case 'hurl': {
+        // the weapon leaves the hand: a grunt of effort, then it whirls
+        // end over end — a slow wub-wub of air as it comes round
+        const w = this.weapons[ev.who];
+        const len = w.bladeLength + w.shaftLength;
+        const out = v(ev.who);
+        this.whoosh(out, t, 0.12, 500, 1100, 0.35);
+        for (let k = 1; k <= 4; k++) {
+          this.whoosh(out, t + k * 0.09 * Math.sqrt(len), 0.08, 700 / Math.sqrt(len), 1400, 0.2 / k);
+        }
+        break;
+      }
+      case 'landed': {
+        // a hit is heard as the wound or the kill; anything else is the
+        // weapon knocked aside or into the furniture, then clattering down
+        if (ev.end === 'hit') break;
+        const out = v(ev.who);
+        if (ev.end === 'guard' || ev.end === 'parry') {
+          this.tone(out, t, 'triangle', 380, 260, 0.14, 0.55);
+          this.noiseHit(out, t, 0.05, 'bandpass', 1000, 700, 3, 0.45);
+        } else {
+          this.noiseHit(out, t, 0.08, 'lowpass', 900, 250, 0.7, 0.5);
+          this.tone(out, t, 'sine', 140, 80, 0.12, 0.4);
+        }
+        for (const [dt, g] of [[0.38, 0.3], [0.5, 0.14], [0.58, 0.07]]) {
+          this.tone(out, t + dt, 'triangle', 240 + Math.random() * 60, 170, 0.07, g);
+          this.noiseHit(out, t + dt, 0.05, 'bandpass', 1300, 900, 2, g);
+        }
+        break;
+      }
+      case 'pickup':
+        // back in hand: the grip scraped up off the floor and squeezed
+        this.noiseHit(v(ev.who), t, 0.1, 'bandpass', 1400, 2200, 1.5, 0.12);
+        this.tone(v(ev.who), t + 0.08, 'triangle', 300, 260, 0.06, 0.15);
+        break;
       case 'dishonor': {
         // a cracked temple bell: two low tones a semitone apart, beating
         const out = this.voice(0);

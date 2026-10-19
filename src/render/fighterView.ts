@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { CharacterDef, FighterState, Obstacle, WeaponDef } from '../sim/types';
 import {
-  bowPose, JointName, kneelLegs, lockPose, movePoses, parryPose, Pose, staggerPose, stancePoses, throwPoses,
+  bowPose, hurlPoses, JointName, kneelLegs, lockPose, movePoses, parryPose, pickupPose, Pose, staggerPose,
+  stancePoses, throwPoses, unarmedPose,
 } from './poses';
 import { Breakable, Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
 import {
@@ -27,6 +28,8 @@ const DOWN = new THREE.Vector3(0, -1, 0);
 const STRIDE_FREQ = 5.2;
 // Pelvis height kneeling on the cut leg, as a fraction of standing
 const KNEEL_HIP_Y = 0.585;
+// …and stooping for a dropped weapon
+const PICKUP_HIP_Y = 0.72;
 
 interface Dangler {
   node: THREE.Object3D;
@@ -594,11 +597,16 @@ export class FighterView {
       case 'flinch':   return { pose: staggerPose, rate: 20 };
       case 'lock':     return { pose: lockPose, rate: 22 };
       case 'bow':      return { pose: bowPose, rate: 5 };
+      case 'pickup':   return { pose: pickupPose, rate: 12 };
+      case 'hurl':
+        return f.phaseFrame < this.hurlWindup
+          ? { pose: hurlPoses.windup, rate: 9 }
+          : { pose: hurlPoses.release, rate: 30 };
       case 'throw':
         return f.phaseFrame < this.throwWindup
           ? { pose: throwPoses.windup, rate: 14 }
           : { pose: throwPoses.release, rate: 32 };
-      default:         return { pose: stancePoses[f.stance], rate: 10 };
+      default:         return { pose: f.armed ? stancePoses[f.stance] : unarmedPose, rate: 10 };
     }
   }
 
@@ -607,6 +615,21 @@ export class FighterView {
   breakables: Breakable[] = [];
   /** Frames a throw holds the cartridge before letting go (rules.json `carts.windup`). */
   throwWindup = 12;
+  /** Frames a weapon throw winds up before letting go (rules.json `hurl.windup`). */
+  hurlWindup = 20;
+
+  /** A copy of the weapon as carried (grip at the origin, along -Y), for throwing. */
+  weaponClone(): THREE.Object3D {
+    const w = deepClone(this.skins.get('wristR')!);
+    w.visible = true;
+    return w;
+  }
+
+  /** World position of the right hand — the weapon hand. */
+  rightHand(out: THREE.Vector3): THREE.Vector3 {
+    this.root.updateMatrixWorld(true);
+    return this.joints.get('wristR')!.getWorldPosition(out);
+  }
 
   /** World position of the left hand — the throwing hand. */
   leftHand(out: THREE.Vector3): THREE.Vector3 {
@@ -645,6 +668,8 @@ export class FighterView {
     }
 
     this.root.position.set(f.pos.x, 0, f.pos.z);
+    // thrown away: the hand's empty until it's picked up (HurlView draws it meanwhile)
+    this.skins.get('wristR')!.visible = f.armed;
 
     // smooth yaw
     let dy = f.facing - this.facing;
@@ -676,6 +701,7 @@ export class FighterView {
     }
 
     let targetHipY = kneeling ? this.baseHipY * KNEEL_HIP_Y : this.baseHipY;
+    if (f.phase === 'pickup' && !kneeling) targetHipY *= PICKUP_HIP_Y;
     if (f.phase === 'idle') {
       // breathing: a slow chest rise so a held guard never looks frozen
       const breath = Math.sin(this.time * 2.1);

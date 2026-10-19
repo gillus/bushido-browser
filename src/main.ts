@@ -7,10 +7,11 @@ import rulesJson from './data/rules.json';
 import { AIController, AIProfile } from './sim/ai';
 import { createSim, MATCH_WINS, ROUND_END_FRAMES, SimConfig, stepSim, TICK } from './sim/sim';
 import {
-  CartRules, CharacterDef, EMPTY_INPUT, HonorRules, InputFrame, Line, SimState, StageDef, WeaponDef,
+  CartRules, CharacterDef, EMPTY_INPUT, HonorRules, HurlRules, InputFrame, Line, SimState, StageDef, WeaponDef,
   obstaclesFromStage,
 } from './sim/types';
 import { CartView } from './render/carts';
+import { HurlView } from './render/hurled';
 import { FighterView } from './render/fighterView';
 import { HitboxOverlay } from './render/hitboxDebug';
 import { createScene } from './render/scene';
@@ -26,7 +27,7 @@ const characters = charactersJson as Record<string, CharacterDef>;
 const weapons = weaponsJson as unknown as Record<string, WeaponDef>;
 const stage = stageJson as unknown as StageDef;
 const BICKER = flavorJson.bicker as [string, string][];
-const rules = rulesJson as { carts: CartRules; honor: HonorRules };
+const rules = rulesJson as { carts: CartRules; hurl: HurlRules; honor: HonorRules };
 
 const fighterChars: [CharacterDef, CharacterDef] = [characters.panzer, characters.sticchio];
 const fighterWeapons: [WeaponDef, WeaponDef] = [
@@ -46,6 +47,7 @@ const cfg: SimConfig = {
   moves: [fighterWeapons[0].moves, fighterWeapons[1].moves],
   lockLeverage: [fighterWeapons[0].lockLeverage ?? 1, fighterWeapons[1].lockLeverage ?? 1],
   carts: rules.carts,
+  hurl: rules.hurl,
   honor: rules.honor,
 };
 
@@ -87,7 +89,11 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => down.delete(e.code));
 // a key held while the window loses focus never sends its keyup — forget it,
 // and stop the fight until the player is back
-window.addEventListener('blur', () => { down.clear(); setPaused(true); });
+window.addEventListener('blur', () => {
+  down.clear();
+  for (const t of throwButtons) t.reset();
+  setPaused(true);
+});
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
 
 interface KeyMap {
@@ -110,8 +116,28 @@ const P2_KEYS: KeyMap = {
 
 const STANCE_ORDER: Line[] = ['low', 'mid', 'high'];
 
+// The throw button does two things: a tap throws a cartridge (on release,
+// so a hold can't fire one first); held HURL_HOLD ticks, it hurls the weapon.
+const HURL_HOLD = 18;
+class ThrowButton {
+  private ticks = -1; // ticks held since the press; -1 = not pressed
+
+  /** Once per sim tick: pressed since the last tick, and down right now. */
+  step(pressed: boolean, held: boolean): 'tap' | 'hold' | null {
+    if (pressed) this.ticks = 0;
+    if (this.ticks < 0) return null;
+    if (!held) { this.ticks = -1; return 'tap'; }
+    if (++this.ticks < HURL_HOLD) return null;
+    this.ticks = -1;
+    return 'hold';
+  }
+
+  reset(): void { this.ticks = -1; }
+}
+const throwButtons = [new ThrowButton(), new ThrowButton()];
+
 /** Keyboard + (optional) gamepad for one player; the two are merged. */
-function readInput(keys: KeyMap, pad: PadRead | null, current: Line): InputFrame {
+function readInput(keys: KeyMap, pad: PadRead | null, current: Line, thrower: ThrowButton): InputFrame {
   const pp = pad?.pressed;
   let stance: Line | null = null;
   if (pressedThisTick.has(keys.high) || pp?.has('high')) stance = 'high';
@@ -122,13 +148,17 @@ function readInput(keys: KeyMap, pad: PadRead | null, current: Line): InputFrame
     stance = STANCE_ORDER[Math.max(0, Math.min(2, k))];
   }
   const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+  const thrown = thrower.step(
+    pressedThisTick.has(keys.throw) || !!pp?.has('throw'), down.has(keys.throw) || !!pad?.throwHeld,
+  );
   return {
     moveY: clamp((down.has(keys.fwd) ? 1 : 0) - (down.has(keys.back) ? 1 : 0) + (pad?.moveY ?? 0)),
     moveX: clamp((down.has(keys.right) ? 1 : 0) - (down.has(keys.left) ? 1 : 0) + (pad?.moveX ?? 0)),
     attack: pressedThisTick.has(keys.attack) || !!pp?.has('attack'),
     dash: pressedThisTick.has(keys.dash) || !!pp?.has('dash'),
     parry: pressedThisTick.has(keys.parry) || !!pp?.has('parry'),
-    throw: pressedThisTick.has(keys.throw) || !!pp?.has('throw'),
+    throw: thrown === 'tap',
+    hurl: thrown === 'hold',
     stance,
   };
 }
@@ -143,12 +173,15 @@ const views = [
 for (const v of views) {
   v.breakables = smashables.flatMap((s) => s.breakables);
   v.throwWindup = rules.carts.windup;
+  v.hurlWindup = rules.hurl.windup;
 }
 scene.add(views[0].root, views[1].root);
 const carts = new CartView(
   [fighterChars[0].cart ?? '#222228', fighterChars[1].cart ?? '#222228'], rules.carts, stage.walls?.halfSize,
 );
 scene.add(carts.group);
+const hurled = new HurlView(views, rules.hurl);
+scene.add(hurled.group);
 // H toggles the sim's real hitboxes (body circle + attack wedge)
 const hitboxes = [new HitboxOverlay(cfg.moves[0]), new HitboxOverlay(cfg.moves[1])];
 scene.add(hitboxes[0].group, hitboxes[1].group);
@@ -204,6 +237,7 @@ function woundTags(f: typeof sim.fighters[0]): string {
     f.wounds.leg ? 'LEG CUT' : '',
   ].filter(Boolean).join(' · ');
   return (tags ? `<br><span class="wound">${tags}</span>` : '')
+    + (f.armed ? '' : '<br><span class="unarmed">無刀 UNARMED</span>')
     + (f.dishonored ? '<br><span class="shame">不名誉 DISHONORED</span>' : '');
 }
 
@@ -263,7 +297,7 @@ const REMATCH_DELAY = 0.8; // s the match banner is up before a press counts
 // events worth hearing again in the replay (no footsteps or stance clicks)
 const REPLAY_SOUNDS = new Set<GameEvent['type']>([
   'swing', 'parryTry', 'clash', 'push', 'shove', 'disengage', 'deflect', 'parried',
-  'wound', 'kill', 'rebound', 'dash', 'topple', 'throw', 'cart', 'dishonor',
+  'wound', 'kill', 'rebound', 'dash', 'topple', 'throw', 'cart', 'dishonor', 'hurl', 'landed', 'pickup',
 ]);
 let hitstop = 0;
 let matchUp = -1; // seconds the match banner has been showing; -1 = hidden
@@ -306,6 +340,7 @@ function playReplay(dt: number): void {
   views.forEach((v, i) => v.update(s.fighters[i], slow, liveObstaclesOf(s)));
   hitboxes.forEach((h, i) => h.update(s.fighters[i]));
   carts.update(s, slow, views);
+  hurled.update(s);
   updateProps(s);
   // debris from the live round keeps settling, in slow motion too
   for (const sm of smashables) sm.update(sim, slow);
@@ -412,8 +447,8 @@ function frame(now: number): void {
     const inputs: [InputFrame, InputFrame] =
       sim.roundPhase === 'fight'
         ? [
-          readInput(P1_KEYS, pads.read(0), a.stance),
-          p2IsAI ? ai.update(sim, cfg, 1) : readInput(P2_KEYS, pads.read(1), b.stance),
+          readInput(P1_KEYS, pads.read(0), a.stance, throwButtons[0]),
+          p2IsAI ? ai.update(sim, cfg, 1) : readInput(P2_KEYS, pads.read(1), b.stance, throwButtons[1]),
         ]
         : [{ ...EMPTY_INPUT }, { ...EMPTY_INPUT }];
 
@@ -456,6 +491,7 @@ function frame(now: number): void {
   hitboxes[0].update(sim.fighters[0]);
   hitboxes[1].update(sim.fighters[1]);
   carts.update(sim, dt, views);
+  hurled.update(sim);
   updateProps(sim);
   for (const s of smashables) {
     for (const { at, kind } of s.update(sim, dt)) {

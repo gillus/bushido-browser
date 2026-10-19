@@ -28,7 +28,7 @@ npm install
 npm run dev      # then open the printed localhost URL
 ```
 
-`npm run build` produces a small static bundle in `dist/` (~173 kB gzipped).
+`npm run build` produces a small static bundle in `dist/` (~175 kB gzipped).
 
 ## Controls
 
@@ -40,6 +40,7 @@ npm run dev      # then open the printed localhost URL
 | Parry      | Space       | /             |
 | Stance     | 1 / 2 / 3   | 8 / 9 / 0     |
 | Throw cart | T           | ;             |
+| Throw weapon | hold T    | hold ;        |
 
 Gamepads (any pad the browser reports with the standard layout; Xbox names,
 PlayStation in brackets). The first pad connected is P1, the second is P2. Keyboard keeps working
@@ -52,6 +53,7 @@ alongside.
 | Dash       | B (○) |
 | Parry      | X (□) |
 | Throw cart | Y (△) |
+| Throw weapon | hold Y (△) |
 | Stance     | RB/RT raise · LB/LT lower — or flick the right stick: up Jodan, sideways Chudan, down Gedan |
 | Toggle AI  | Back (Share) |
 | Pause      | Start (Options) — then Y (△) resets the match, X (□) cycles the AI level |
@@ -123,6 +125,14 @@ Pads rumble when you're cut, killed, deflected or parried.
   it from any line, and tall enough furniture stops it. Throwing leaves
   you open, so do it from out of reach. The cartridge in flight can be
   sidestepped.
+- **Tachi-nage 太刀投げ: throw your weapon.** Hold the throw button and
+  you hurl the tube (or the broom) itself, on your stance's line like a
+  cartridge. It hits like a cut: dead centre kills, a clip at the edge of
+  its path maims. A guard on that line or a parry knocks it away, and
+  then you're *UNARMED 無刀*: no cuts, no guard, no parry, only your
+  cartridges and your feet, until you walk back over it (a short stoop —
+  wide open). A last resort. (A tap still throws a cartridge; it goes when
+  you let go of the button.)
 - **The honor code.** Each round opens with a bow (*REI 礼*); any input
   ends yours. Landing a cut or a cartridge on an opponent who is still
   bowing, or hitting them in the back, is *DISHONOR 不名誉*: a dishonored
@@ -174,7 +184,8 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   into them or a fighter is shoved into them out of a blade lock
   (everything is repaired for the next round).
 - `rules.json` — the cartridge throw (`ammo`, `windup`, `recovery`,
-  `speed`, flight `heights` per line) and the honor code (`bowFrames`, and
+  `speed`, flight `heights` per line), the weapon throw (`hurl`: the same
+  plus `pickupFrames`, the stoop to get it back) and the honor code (`bowFrames`, and
   `backDeg`: how far round behind someone a hit counts as "in the back").
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
   pairs), played out in RPG text boxes before each round. New stage = new

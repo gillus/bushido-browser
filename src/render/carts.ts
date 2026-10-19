@@ -101,7 +101,7 @@ interface Flyer {
  */
 export class CartView {
   readonly group = new THREE.Group();
-  private flyers: Flyer[] = [];
+  private flyers: (Flyer | null)[] = []; // null: a hurled weapon (HurlView's)
   private held: THREE.Mesh[];
   private hand = new THREE.Vector3();
 
@@ -121,11 +121,12 @@ export class CartView {
 
     // a new round, or a replay cut back to before a throw
     while (this.flyers.length > s.carts.length) {
-      const fl = this.flyers.pop()!;
-      this.group.remove(fl.mesh, fl.trail);
+      const fl = this.flyers.pop();
+      if (fl) this.group.remove(fl.mesh, fl.trail);
     }
 
     s.carts.forEach((c, k) => {
+      if (c.kind) { this.flyers[k] = null; return; }
       let fl = this.flyers[k];
       if (!fl) {
         const trail = new THREE.Mesh(trailGeo, trailMat);

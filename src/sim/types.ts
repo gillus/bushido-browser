@@ -220,14 +220,15 @@ export interface InputFrame {
   parry: boolean;
   stance: Line | null;    // direct stance select, null = keep
   throw: boolean;         // throw a cartridge (edge-triggered)
+  hurl: boolean;          // throw your weapon (edge-triggered; main maps a held throw button)
 }
 
 export const EMPTY_INPUT: InputFrame = {
-  moveX: 0, moveY: 0, attack: false, dash: false, parry: false, stance: null, throw: false,
+  moveX: 0, moveY: 0, attack: false, dash: false, parry: false, stance: null, throw: false, hurl: false,
 };
 
 export type FighterPhase =
-  | 'bow' | 'idle' | 'windup' | 'active' | 'recovery' | 'throw'
+  | 'bow' | 'idle' | 'windup' | 'active' | 'recovery' | 'throw' | 'hurl' | 'pickup'
   | 'parry' | 'stagger' | 'flinch' | 'lock' | 'dead';
 
 /**
@@ -246,6 +247,22 @@ export interface CartRules {
 }
 
 /**
+ * Throwing your weapon (`rules.json` → `hurl`): the last resort. It flies
+ * like a cartridge on the stance line, but a hit kills. Until you walk
+ * back onto it (`pickupFrames` stooping, open), you can't cut, guard or
+ * parry.
+ */
+export interface HurlRules {
+  name: string;
+  windup: number;
+  recovery: number;
+  speed: number;
+  range: number;
+  pickupFrames: number;
+  heights: Record<Line, number>;
+}
+
+/**
  * The honor code (`rules.json` → `honor`). Each round opens with a bow
  * (`bowFrames`; any input breaks your own); landing a cut or a cartridge on
  * an opponent still bowing, or from more than `backDeg` off their facing,
@@ -258,8 +275,9 @@ export interface HonorRules {
 
 export type CartEnd = 'hit' | 'guard' | 'parry' | 'wall' | 'prop' | 'spent';
 
-/** A cartridge in flight (or, once `end` is set, where it stopped). */
+/** A cartridge — or a hurled weapon — in flight (or, once `end` is set, where it stopped). */
 export interface Cart {
+  kind?: 'weapon';        // absent = a cartridge
   owner: number;
   line: Line;
   x: number; z: number;
@@ -289,6 +307,8 @@ export interface FighterState {
   score: number;
   carts: number;          // cartridges left this round
   dishonored: boolean;    // broke the honor code this round: a kill won't score
+  armed: boolean;         // false once the weapon is thrown, until it's picked up
+  weaponAt: { x: number; z: number } | null; // where the thrown weapon lies (null: in hand or in the air)
 }
 
 export type RoundPhase = 'fight' | 'end';
