@@ -3,11 +3,14 @@ import weaponsJson from './data/weapons.json';
 import stageJson from './data/stage.json';
 import flavorJson from './data/flavor.json';
 import aiJson from './data/ai.json';
+import rulesJson from './data/rules.json';
 import { AIController, AIProfile } from './sim/ai';
 import { createSim, MATCH_WINS, ROUND_END_FRAMES, SimConfig, stepSim, TICK } from './sim/sim';
 import {
-  CharacterDef, EMPTY_INPUT, InputFrame, Line, SimState, StageDef, WeaponDef, obstaclesFromStage,
+  CartRules, CharacterDef, EMPTY_INPUT, HonorRules, InputFrame, Line, SimState, StageDef, WeaponDef,
+  obstaclesFromStage,
 } from './sim/types';
+import { CartView } from './render/carts';
 import { FighterView } from './render/fighterView';
 import { HitboxOverlay } from './render/hitboxDebug';
 import { createScene } from './render/scene';
@@ -23,6 +26,7 @@ const characters = charactersJson as Record<string, CharacterDef>;
 const weapons = weaponsJson as unknown as Record<string, WeaponDef>;
 const stage = stageJson as unknown as StageDef;
 const BICKER = flavorJson.bicker as [string, string][];
+const rules = rulesJson as { carts: CartRules; honor: HonorRules };
 
 const fighterChars: [CharacterDef, CharacterDef] = [characters.panzer, characters.sticchio];
 const fighterWeapons: [WeaponDef, WeaponDef] = [
@@ -41,6 +45,8 @@ const cfg: SimConfig = {
   chars: fighterChars,
   moves: [fighterWeapons[0].moves, fighterWeapons[1].moves],
   lockLeverage: [fighterWeapons[0].lockLeverage ?? 1, fighterWeapons[1].lockLeverage ?? 1],
+  carts: rules.carts,
+  honor: rules.honor,
 };
 
 // ---------- remembered settings ----------
@@ -86,19 +92,19 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) setPa
 
 interface KeyMap {
   fwd: string; back: string; left: string; right: string;
-  attack: string; dash: string; parry: string;
+  attack: string; dash: string; parry: string; throw: string;
   high: string; mid: string; low: string;
 }
 
 const P1_KEYS: KeyMap = {
   fwd: 'KeyW', back: 'KeyS', left: 'KeyA', right: 'KeyD',
-  attack: 'KeyF', dash: 'KeyG', parry: 'Space',
+  attack: 'KeyF', dash: 'KeyG', parry: 'Space', throw: 'KeyT',
   high: 'Digit1', mid: 'Digit2', low: 'Digit3',
 };
 
 const P2_KEYS: KeyMap = {
   fwd: 'ArrowUp', back: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight',
-  attack: 'Period', dash: 'Comma', parry: 'Slash',
+  attack: 'Period', dash: 'Comma', parry: 'Slash', throw: 'Semicolon',
   high: 'Digit8', mid: 'Digit9', low: 'Digit0',
 };
 
@@ -122,6 +128,7 @@ function readInput(keys: KeyMap, pad: PadRead | null, current: Line): InputFrame
     attack: pressedThisTick.has(keys.attack) || !!pp?.has('attack'),
     dash: pressedThisTick.has(keys.dash) || !!pp?.has('dash'),
     parry: pressedThisTick.has(keys.parry) || !!pp?.has('parry'),
+    throw: pressedThisTick.has(keys.throw) || !!pp?.has('throw'),
     stance,
   };
 }
@@ -133,8 +140,15 @@ const views = [
   new FighterView(cfg.chars[0], fighterWeapons[0], [...obstacles, ...roomWalls]),
   new FighterView(cfg.chars[1], fighterWeapons[1], [...obstacles, ...roomWalls]),
 ];
-for (const v of views) v.breakables = smashables.flatMap((s) => s.breakables);
+for (const v of views) {
+  v.breakables = smashables.flatMap((s) => s.breakables);
+  v.throwWindup = rules.carts.windup;
+}
 scene.add(views[0].root, views[1].root);
+const carts = new CartView(
+  [fighterChars[0].cart ?? '#222228', fighterChars[1].cart ?? '#222228'], rules.carts, stage.walls?.halfSize,
+);
+scene.add(carts.group);
 // H toggles the sim's real hitboxes (body circle + attack wedge)
 const hitboxes = [new HitboxOverlay(cfg.moves[0]), new HitboxOverlay(cfg.moves[1])];
 scene.add(hitboxes[0].group, hitboxes[1].group);
@@ -189,8 +203,13 @@ function woundTags(f: typeof sim.fighters[0]): string {
     f.wounds.arm ? 'ARM CUT' : '',
     f.wounds.leg ? 'LEG CUT' : '',
   ].filter(Boolean).join(' · ');
-  return tags ? `<br><span class="wound">${tags}</span>` : '';
+  return (tags ? `<br><span class="wound">${tags}</span>` : '')
+    + (f.dishonored ? '<br><span class="shame">不名誉 DISHONORED</span>' : '');
 }
+
+// cartridges left this round: ▮ in hand, ▯ thrown
+const cartTags = (n: number): string =>
+  `<span class="carts">${'▮'.repeat(n)}<span class="spent">${'▯'.repeat(Math.max(0, rules.carts.ammo - n))}</span></span>`;
 
 // one pip per clean kill toward the match
 const pips = (score: number): string =>
@@ -201,11 +220,11 @@ function renderHud(): void {
   hud.p1.innerHTML =
     `<b>${cfg.chars[0].name}</b> <span class="weapon">${fighterWeapons[0].name}</span>` +
     ` &nbsp;${pips(a.score)}<br>` +
-    `<span class="stance">${STANCE_LABEL[a.stance]}</span>${woundTags(a)}`;
+    `<span class="stance">${STANCE_LABEL[a.stance]}</span> ${cartTags(a.carts)}${woundTags(a)}`;
   hud.p2.innerHTML =
     `<b>${cfg.chars[1].name}</b> <span class="weapon">${fighterWeapons[1].name}</span>` +
     ` &nbsp;${pips(b.score)}<br>` +
-    `<span class="stance">${STANCE_LABEL[b.stance]}</span>${woundTags(b)}`;
+    `${cartTags(b.carts)} <span class="stance">${STANCE_LABEL[b.stance]}</span>${woundTags(b)}`;
   hud.msg.textContent = sim.messageTimer > 0 ? sim.message : '';
   // tsubazeriai meter: P1 pushes the mark right, toward P2's side of the HUD
   const locked = a.phase === 'lock';
@@ -238,12 +257,13 @@ const replay = new Replay();
 replay.clear(sim);
 const HITSTOP_KILL = 0.18; // seconds the picture holds on the killing blow…
 const HITSTOP_WOUND = 0.07; // …and on a graze
+const HITSTOP_CART = 0.04;  // …and a cartridge to the head
 const ORBIT_FROM = -0.55, ORBIT_SWEEP = 1.1; // replay camera drifts this far round the pair
 const REMATCH_DELAY = 0.8; // s the match banner is up before a press counts
 // events worth hearing again in the replay (no footsteps or stance clicks)
 const REPLAY_SOUNDS = new Set<GameEvent['type']>([
   'swing', 'parryTry', 'clash', 'push', 'shove', 'disengage', 'deflect', 'parried',
-  'wound', 'kill', 'rebound', 'dash', 'topple',
+  'wound', 'kill', 'rebound', 'dash', 'topple', 'throw', 'cart', 'dishonor',
 ]);
 let hitstop = 0;
 let matchUp = -1; // seconds the match banner has been showing; -1 = hidden
@@ -285,6 +305,7 @@ function playReplay(dt: number): void {
   const slow = dt * speed;
   views.forEach((v, i) => v.update(s.fighters[i], slow, liveObstaclesOf(s)));
   hitboxes.forEach((h, i) => h.update(s.fighters[i]));
+  carts.update(s, slow, views);
   updateProps(s);
   // debris from the live round keeps settling, in slow motion too
   for (const sm of smashables) sm.update(sim, slow);
@@ -399,12 +420,13 @@ function frame(now: number): void {
     const wasEnded = sim.roundPhase === 'end';
     const before = snapshot(sim);
     stepSim(sim, cfg, inputs);
-    let killed = false, wounded = false;
+    let killed = false, wounded = false, carted = false;
     for (const ev of diffTick(before, sim)) {
       sfx.play(ev);
       pads.rumble(ev);
       if (ev.type === 'kill') killed = true;
       if (ev.type === 'wound') wounded = true;
+      if (ev.type === 'cart' && ev.end === 'hit') carted = true;
     }
     if (wasEnded && sim.roundPhase === 'fight') {
       pickQuote();
@@ -415,10 +437,10 @@ function frame(now: number): void {
     pads.clearPressed();
     acc -= TICK;
     const cut = replay.record(sim, killed);
-    if (killed || wounded || cut) {
+    if (killed || wounded || carted || cut) {
       // the picture holds on the blow (views keep the pose of the moment
       // it landed); the rest of this frame's time is dropped
-      hitstop = killed ? HITSTOP_KILL : wounded ? HITSTOP_WOUND : 0;
+      hitstop = killed ? HITSTOP_KILL : wounded ? HITSTOP_WOUND : carted ? HITSTOP_CART : 0;
       acc = 0;
       if (cut) startReplay();
       break;
@@ -433,6 +455,7 @@ function frame(now: number): void {
   views[1].update(sim.fighters[1], dt, liveObstacles);
   hitboxes[0].update(sim.fighters[0]);
   hitboxes[1].update(sim.fighters[1]);
+  carts.update(sim, dt, views);
   updateProps(sim);
   for (const s of smashables) {
     for (const { at, kind } of s.update(sim, dt)) {

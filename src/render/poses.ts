@@ -156,3 +156,34 @@ export const deadPose: Pose = {
   hipR: [-0.1, 0, 0.15], kneeR: [0.25, 0, 0],
   hipL: [0.15, 0, -0.2], kneeL: [0.15, 0, 0],
 };
+
+// Rei: the opening bow — bent at the waist, eyes down, arms hanging, the
+// weapon held back along the leg. The shoulders undo the torso's pitch so
+// the arms still hang plumb.
+export const bowPose: Pose = {
+  torso: [0.62, 0, 0], head: [0.3, 0, 0],
+  shoulderR: [-0.72, -0.05, -0.12], elbowR: [-0.15, 0, 0], wristR: [1.2, 0, 0],
+  shoulderL: [-0.68, 0.05, 0.12], elbowL: [-0.18, 0, 0],
+  hipR: [0, 0, 0.04], kneeR: [0.04, 0, 0],
+  hipL: [0, 0, -0.04], kneeL: [0.04, 0, 0],
+};
+
+// Shuriken-uchi: the cartridge goes with the free left hand, overhand,
+// while the weapon hangs low in the right
+const throwArmR: Pose = { shoulderR: [-0.6, -0.2, -0.3], elbowR: [-0.45, 0, 0], wristR: [-0.4, 0, 0] };
+export const throwPoses: { windup: Pose; release: Pose } = {
+  // left shoulder drawn back, the cart cocked up behind the ear
+  windup: {
+    torso: [-0.08, -0.4, 0], head: [0, 0.35, 0],
+    ...throwArmR,
+    shoulderL: [-2.5, 0.2, 0.3], elbowL: [-1.5, 0, 0],
+    ...guardLegs,
+  },
+  // and snapped through: arm straight at the target, shoulder leading
+  release: {
+    torso: [0.25, 0.35, 0], head: [-0.1, -0.3, 0],
+    ...throwArmR,
+    shoulderL: [-1.55, 0.1, 0.15], elbowL: [-0.05, 0, 0],
+    ...lungeLegs,
+  },
+};

@@ -1,4 +1,4 @@
-import { FighterPhase, Line, RoundPhase, SimState, WoundRegion } from './sim/types';
+import { CartEnd, FighterPhase, Line, RoundPhase, SimState, WoundRegion } from './sim/types';
 
 /**
  * Presentation events (audio, rumble) derived by diffing the sim before and
@@ -21,7 +21,10 @@ export type GameEvent =
   | { type: 'dash'; who: number }
   | { type: 'step'; who: number; kneeling: boolean }
   | { type: 'stance'; who: number }
-  | { type: 'topple'; prop: number };
+  | { type: 'topple'; prop: number }
+  | { type: 'throw'; who: number }                // `who` let a cartridge go
+  | { type: 'cart'; who: number; end: CartEnd }   // a cartridge aimed at `who` stopped
+  | { type: 'dishonor'; who: number };            // `who` broke the honor code
 
 export interface TickSnapshot {
   frame: number;
@@ -29,9 +32,10 @@ export interface TickSnapshot {
   lockBalance: number;
   fighters: {
     phase: FighterPhase; stance: Line; dashLeft: number; step: number;
-    wounds: Record<WoundRegion, boolean>;
+    wounds: Record<WoundRegion, boolean>; dishonored: boolean;
   }[];
   downs: boolean[];
+  carts: (CartEnd | null)[];
 }
 
 // Footfalls land at the extremes of the leg swing, sin(walkCycle * 5.2) in
@@ -48,15 +52,21 @@ export function snapshot(sim: SimState): TickSnapshot {
     lockBalance: sim.lockBalance,
     fighters: sim.fighters.map((f) => ({
       phase: f.phase, stance: f.stance, dashLeft: f.dashLeft,
-      step: stepIndex(f.walkCycle), wounds: { ...f.wounds },
+      step: stepIndex(f.walkCycle), wounds: { ...f.wounds }, dishonored: f.dishonored,
     })),
     downs: sim.obstacleState.map((s) => s.down),
+    carts: sim.carts.map((c) => c.end),
   };
 }
 
 export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
   const out: GameEvent[] = [];
   if (before.frame === 0) out.push({ type: 'roundStart' }); // fresh sim (load / R)
+  // cartridges still in the air when the round ends land meanwhile
+  sim.carts.forEach((c, i) => {
+    if (i >= before.carts.length) out.push({ type: 'throw', who: c.owner });
+    if (c.end && !before.carts[i]) out.push({ type: 'cart', who: 1 - c.owner, end: c.end });
+  });
   if (before.roundPhase === 'end') {
     // a round reset swaps in fresh fighters; nothing else to diff on that tick
     if (sim.roundPhase === 'fight') out.push({ type: 'roundStart' });
@@ -85,11 +95,13 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
       else if (f.phase === 'stagger' && b.phase !== 'lock') {
         out.push({ type: o.phase === 'parry' ? 'parried' : 'deflect', who: i });
       } else if (f.phase === 'parry') out.push({ type: 'parryTry', who: i });
-      else if (f.phase === 'flinch') {
-        const region: WoundRegion = !b.wounds.leg && f.wounds.leg ? 'leg' : 'arm';
-        out.push({ type: 'wound', who: i, region });
-      } else if (f.phase === 'dead') out.push({ type: 'kill', who: i, mutual: bothDead });
+      else if (f.phase === 'dead') out.push({ type: 'kill', who: i, mutual: bothDead });
     }
+    // a flinch is a wound only if a wound appeared (a cartridge flinches too)
+    for (const region of ['arm', 'leg'] as const) {
+      if (f.wounds[region] && !b.wounds[region]) out.push({ type: 'wound', who: i, region });
+    }
+    if (f.dishonored && !b.dishonored) out.push({ type: 'dishonor', who: i });
     if (f.stance !== b.stance) out.push({ type: 'stance', who: i });
     if (f.dashLeft > 0 && b.dashLeft <= 0) out.push({ type: 'dash', who: i });
     if (f.phase !== 'dead' && stepIndex(f.walkCycle) > b.step) {

@@ -191,6 +191,38 @@ export class Sfx {
         // grip shifting on the handle
         this.noiseHit(v(ev.who), t, 0.045, 'bandpass', 2400, 1800, 2, 0.08);
         break;
+      case 'throw':
+        // a flick of the wrist, then the cart fluttering through the air
+        this.whoosh(v(ev.who), t, 0.1, 1800, 3600, 0.22);
+        this.whoosh(v(ev.who), t + 0.06, 0.22, 2400, 3000, 0.08);
+        break;
+      case 'cart': {
+        // hollow plastic: a clack off whatever stopped it, then on the floor
+        const out = v(ev.who);
+        if (ev.end === 'hit') {
+          this.tone(out, t, 'sine', 210, 120, 0.09, 0.45); // into a body
+          this.noiseHit(out, t, 0.05, 'bandpass', 1500, 1100, 2, 0.4);
+        } else {
+          const f = ev.end === 'parry' ? 1500 : ev.end === 'guard' ? 1200 : 900;
+          this.tone(out, t, 'triangle', f, f * 0.7, 0.06, 0.4);
+          this.noiseHit(out, t, 0.04, 'bandpass', f * 2.2, f * 1.6, 3, 0.35);
+        }
+        for (const [dt, g] of [[0.32, 0.22], [0.42, 0.1]]) {
+          const f = 1700 + Math.random() * 500;
+          this.tone(out, t + dt, 'triangle', f, f * 0.8, 0.04, g);
+          this.noiseHit(out, t + dt, 0.03, 'bandpass', 3200, 2600, 3, g * 0.8);
+        }
+        break;
+      }
+      case 'dishonor': {
+        // a cracked temple bell: two low tones a semitone apart, beating
+        const out = this.voice(0);
+        this.tone(out, t, 'sine', 98, 96, 2.2, 0.5, 0.004);
+        this.tone(out, t, 'sine', 104, 101, 2.0, 0.4, 0.004);
+        this.tone(out, t, 'triangle', 392, 380, 0.9, 0.12, 0.004);
+        this.noiseHit(out, t, 0.12, 'bandpass', 700, 500, 2, 0.25);
+        break;
+      }
       case 'topple': {
         // the standee goes down: a slap of cardboard, then it lands flat
         const out = this.voice(0);

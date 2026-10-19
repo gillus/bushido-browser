@@ -1,0 +1,15 @@
+{
+  "carts": {
+    "name": "Shuriken-uchi",
+    "ammo": 3,
+    "windup": 12,
+    "recovery": 20,
+    "speed": 13,
+    "range": 9,
+    "heights": { "high": 1.5, "mid": 1.1, "low": 0.4 }
+  },
+  "honor": {
+    "bowFrames": 72,
+    "backDeg": 120
+  }
+}

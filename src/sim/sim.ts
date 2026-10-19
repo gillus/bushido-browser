@@ -1,6 +1,6 @@
 import {
-  CharacterDef, EMPTY_INPUT, FighterState, InputFrame, Line, MoveDef, MoveTable,
-  SimState, WoundRegion, Obstacle, ObstacleState,
+  Cart, CartEnd, CartRules, CharacterDef, EMPTY_INPUT, FighterState, HonorRules, InputFrame, Line,
+  MoveDef, MoveTable, SimState, WoundRegion, Obstacle, ObstacleState,
 } from './types';
 
 export const TICK = 1 / 60;
@@ -57,6 +57,12 @@ export const BLADE_FROM = 0.4;    // m from body center: the hands
 export const BLADE_STEP = 0.1;
 const REBOUND_STAGGER_FRAMES = 32; // about a whiff's recovery, from a worse pose
 
+// Thrown cartridges: tested every CART_STEP m along the flight, released
+// this far in front of the thrower, and hit a body within this of it.
+const CART_STEP = 0.1;
+export const CART_FROM = 0.4;
+const CART_RADIUS = 0.07;
+
 export interface SimConfig {
   arenaRadius: number;
   arenaHalf?: number;    // square arena half-extent (room walls); overrides arenaRadius
@@ -64,14 +70,16 @@ export interface SimConfig {
   chars: [CharacterDef, CharacterDef];
   moves: [MoveTable, MoveTable]; // per fighter, from their weapon
   lockLeverage?: [number, number]; // per fighter, from their weapon (default 1)
+  carts?: CartRules;   // rules.json; absent = nobody throws
+  honor?: HonorRules;  // rules.json; absent = no bow, no dishonor
 }
 
-function makeFighter(index: number): FighterState {
+function makeFighter(index: number, cfg: SimConfig): FighterState {
   return {
     pos: { x: 0, z: index === 0 ? -2.3 : 2.3 },
     facing: index === 0 ? 0 : Math.PI,
     stance: 'mid',
-    phase: 'idle',
+    phase: cfg.honor ? 'bow' : 'idle',
     phaseFrame: 0,
     move: null,
     didHit: false,
@@ -83,6 +91,8 @@ function makeFighter(index: number): FighterState {
     staggerLen: STAGGER_FRAMES,
     rebound: null,
     score: 0,
+    carts: cfg.carts?.ammo ?? 0,
+    dishonored: false,
   };
 }
 
@@ -93,29 +103,36 @@ function freshObstacleState(cfg: SimConfig): ObstacleState[] {
 export function createSim(cfg: SimConfig): SimState {
   return {
     frame: 0,
-    fighters: [makeFighter(0), makeFighter(1)],
+    fighters: [makeFighter(0, cfg), makeFighter(1, cfg)],
     roundPhase: 'fight',
     roundFrame: 0,
-    message: 'FIGHT',
-    messageTimer: 70,
+    ...openingMessage(cfg),
     obstacleState: freshObstacleState(cfg),
     lockBalance: 0,
     matchWinner: null,
+    carts: [],
   };
+}
+
+/** Rounds open on the bow when there's an honor code, else straight to it. */
+function openingMessage(cfg: SimConfig): { message: string; messageTimer: number } {
+  return cfg.honor
+    ? { message: 'REI 礼', messageTimer: cfg.honor.bowFrames }
+    : { message: 'FIGHT', messageTimer: 70 };
 }
 
 function resetRound(sim: SimState, cfg: SimConfig): void {
   for (let i = 0; i < 2; i++) {
     const score = sim.fighters[i].score;
-    sim.fighters[i] = makeFighter(i);
+    sim.fighters[i] = makeFighter(i, cfg);
     sim.fighters[i].score = score;
   }
   sim.roundPhase = 'fight';
   sim.roundFrame = 0;
-  sim.message = 'FIGHT';
-  sim.messageTimer = 70;
+  Object.assign(sim, openingMessage(cfg));
   sim.obstacleState = freshObstacleState(cfg); // the standee rises again
   sim.lockBalance = 0;
+  sim.carts = [];
 }
 
 function angleWrap(a: number): number {
@@ -134,9 +151,23 @@ function updateFighter(
 ): void {
   if (f.phase === 'dead') { f.phaseFrame++; return; }
 
-  // Face the opponent while free; facing is locked once an attack starts.
-  if (f.phase === 'idle' || f.phase === 'stagger'
-    || f.phase === 'flinch' || f.phase === 'parry') {
+  // The opening bow lasts until its time is up or you do anything at all
+  // (acting first is allowed; hitting someone still bowing is not).
+  if (f.phase === 'bow') {
+    const acted = inp.attack || inp.dash || inp.parry || inp.throw || inp.stance !== null
+      || Math.hypot(inp.moveX, inp.moveY) > 0.2;
+    if (acted || ++f.phaseFrame >= cfg.honor!.bowFrames) {
+      f.phase = 'idle';
+      f.phaseFrame = 0;
+      if (sim.message === 'REI 礼' && o.phase !== 'bow') { sim.message = 'FIGHT'; sim.messageTimer = 50; }
+    }
+  }
+
+  // Face the opponent while free; facing is locked once an attack starts
+  // (a throw keeps aiming until the cartridge leaves the hand).
+  if (f.phase === 'idle' || f.phase === 'stagger' || f.phase === 'bow'
+    || f.phase === 'flinch' || f.phase === 'parry'
+    || (f.phase === 'throw' && f.phaseFrame < cfg.carts!.windup)) {
     f.facing = Math.atan2(o.pos.x - f.pos.x, o.pos.z - f.pos.z);
   }
 
@@ -162,6 +193,13 @@ function updateFighter(
         f.phaseFrame = 0;
         f.didHit = false;
         f.rebound = null;
+        f.dashLeft = 0;
+        break;
+      }
+
+      if (inp.throw && f.carts > 0) {
+        f.phase = 'throw';
+        f.phaseFrame = 0;
         f.dashLeft = 0;
         break;
       }
@@ -223,6 +261,21 @@ function updateFighter(
 
     case 'parry': {
       if (++f.phaseFrame >= PARRY_TOTAL) { f.phase = 'idle'; f.phaseFrame = 0; }
+      break;
+    }
+
+    case 'throw': {
+      const rules = cfg.carts!;
+      if (f.phaseFrame === rules.windup) {
+        const dx = Math.sin(f.facing), dz = Math.cos(f.facing);
+        f.carts--;
+        sim.carts.push({
+          owner: sim.fighters.indexOf(f), line: f.stance,
+          x: f.pos.x + dx * CART_FROM, z: f.pos.z + dz * CART_FROM, dx, dz,
+          flown: 0, end: null, endFrame: 0,
+        });
+      }
+      if (++f.phaseFrame >= rules.windup + rules.recovery) { f.phase = 'idle'; f.phaseFrame = 0; }
       break;
     }
 
@@ -464,6 +517,91 @@ function reboundOffFurniture(sim: SimState, cfg: SimConfig): void {
   }
 }
 
+/**
+ * Was a blow arriving along direction (dx, dz) at `o` dishonorable — `o`
+ * still bowing, or struck from behind? Never without an honor code.
+ */
+function dishonorable(o: FighterState, dx: number, dz: number, cfg: SimConfig): boolean {
+  if (!cfg.honor) return false;
+  if (o.phase === 'bow') return true;
+  // the blow travels (dx, dz); it came from the opposite way
+  const from = Math.atan2(-dx, -dz);
+  return Math.abs(angleWrap(from - o.facing)) > (cfg.honor.backDeg * Math.PI) / 180;
+}
+
+function dishonor(sim: SimState, cfg: SimConfig, i: number): void {
+  sim.fighters[i].dishonored = true;
+  sim.message = `${cfg.chars[i].name.toUpperCase()} — DISHONOR 不名誉`;
+  sim.messageTimer = 90;
+}
+
+/**
+ * Fly every cartridge still in the air one tick: furniture tall enough
+ * for its line or a wall stops it (cardboard gets knocked flat), and the
+ * thrower's opponent catches it — unless guarding that line (deflected)
+ * or inside a parry window (swatted away, and back to neutral). A hit
+ * flinches; it never wounds. `strike` = false once the round is over:
+ * carts still in the air only fly on into the furniture.
+ */
+function updateCarts(sim: SimState, cfg: SimConfig, strike: boolean): void {
+  const rules = cfg.carts;
+  if (!rules) return;
+  const stop = (c: Cart, end: CartEnd): void => { c.end = end; c.endFrame = sim.frame; };
+  for (const c of sim.carts) {
+    if (c.end) continue;
+    const step = rules.speed * TICK;
+    const n = Math.ceil(step / CART_STEP);
+    for (let k = 0; k < n && !c.end; k++) {
+      c.x += c.dx * (step / n);
+      c.z += c.dz * (step / n);
+      c.flown += step / n;
+      if (cfg.arenaHalf !== undefined
+        ? Math.abs(c.x) > cfg.arenaHalf || Math.abs(c.z) > cfg.arenaHalf
+        : c.flown > rules.range) {
+        stop(c, cfg.arenaHalf !== undefined ? 'wall' : 'spent');
+        break;
+      }
+      for (let i = 0; i < cfg.obstacles.length; i++) {
+        const ob = cfg.obstacles[i];
+        const st = sim.obstacleState[i];
+        if (st.down || !inBox(ob, c.x, c.z)) continue;
+        if (ob.knockable) { st.down = true; st.fx = c.dx; st.fz = c.dz; st.downFrame = sim.frame; }
+        if (ob.knockable || ob.y1 >= rules.heights[c.line]) { stop(c, 'prop'); break; }
+      }
+      if (c.end || !strike) continue;
+      const t = 1 - c.owner;
+      const o = sim.fighters[t];
+      if (o.phase === 'dead'
+        || Math.hypot(o.pos.x - c.x, o.pos.z - c.z) > BODY_RADIUS + CART_RADIUS) continue;
+      if (o.phase === 'lock') stop(c, 'guard'); // it bounces off the crossed weapons
+      else if (o.phase === 'parry' && o.phaseFrame < PARRY_WINDOW) {
+        stop(c, 'parry');
+        o.phase = 'idle';
+        o.phaseFrame = 0;
+        sim.message = 'PARRIED';
+        sim.messageTimer = 40;
+      } else if (o.phase === 'idle' && o.dashLeft <= 0 && o.stance === c.line) {
+        stop(c, 'guard');
+        sim.message = 'DEFLECTED';
+        sim.messageTimer = 40;
+      } else {
+        stop(c, 'hit');
+        const shame = dishonorable(o, c.dx, c.dz, cfg);
+        if (o.phase !== 'stagger') {
+          o.phase = 'flinch';
+          o.phaseFrame = 0;
+          o.move = null;
+          o.didHit = false;
+          o.dashLeft = 0;
+        }
+        sim.message = rules.name.toUpperCase();
+        sim.messageTimer = 45;
+        if (shame) dishonor(sim, cfg, c.owner);
+      }
+    }
+  }
+}
+
 interface HitTest { hit: boolean; glancing: boolean; }
 
 /** Does attacker `f` reach opponent `o` this frame, and how cleanly? */
@@ -487,12 +625,14 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
   if (sim.messageTimer > 0) sim.messageTimer--;
 
   if (sim.roundPhase === 'end') {
+    updateCarts(sim, cfg, false);
     sim.roundFrame++;
     for (const f of sim.fighters) if (f.phase === 'dead') f.phaseFrame++;
     if (sim.roundFrame >= ROUND_END_FRAMES && sim.matchWinner === null) resetRound(sim, cfg);
     return;
   }
 
+  updateCarts(sim, cfg, true);
   const [a, b] = sim.fighters;
   if (a.phase === 'lock') { updateLock(sim, cfg, inputs); return; } // both lock together
   updateFighter(a, b, cfg.chars[0], cfg.moves[0], cfg, sim, inputs[0]);
@@ -506,6 +646,7 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
   // Resolve blades. Collect first so a mutual hit is a true double kill.
   const kills: [boolean, boolean] = [false, false];
   const wounds: [WoundRegion | null, WoundRegion | null] = [null, null];
+  const shamed: [boolean, boolean] = [false, false];
   let deflected = false;
   let parried = false;
   for (let i = 0; i < 2; i++) {
@@ -535,6 +676,7 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
       const region: WoundRegion = f.move!.line === 'low' ? 'leg' : 'arm';
       if (res.glancing && !o.wounds[region]) wounds[1 - i] = region;
       else kills[1 - i] = true; // clean hit, or nothing left to give there
+      if (dishonorable(o, o.pos.x - f.pos.x, o.pos.z - f.pos.z, cfg)) shamed[i] = true;
     }
   }
 
@@ -551,6 +693,8 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
     sim.message = `${cfg.chars[i].name.toUpperCase()} — ${region.toUpperCase()} CUT`;
     sim.messageTimer = 60;
   }
+
+  for (let i = 0; i < 2; i++) if (shamed[i]) dishonor(sim, cfg, i);
 
   if (parried && !kills[0] && !kills[1] && !wounds[0] && !wounds[1]) {
     sim.message = 'PARRIED';
@@ -573,9 +717,14 @@ export function stepSim(sim: SimState, cfg: SimConfig, inputs: [InputFrame, Inpu
       sim.message = 'AI-UCHI — MUTUAL SLAYING';
     } else {
       const w = kills[0] ? 1 : 0;
-      sim.fighters[w].score++;
-      if (sim.fighters[w].score >= MATCH_WINS) sim.matchWinner = w;
-      sim.message = `${cfg.chars[w].name.toUpperCase()} STRIKES TRUE`;
+      const name = cfg.chars[w].name.toUpperCase();
+      if (sim.fighters[w].dishonored) {
+        sim.message = `${name} STRIKES WITHOUT HONOR — NO POINT`; // the kill doesn't count
+      } else {
+        sim.fighters[w].score++;
+        if (sim.fighters[w].score >= MATCH_WINS) sim.matchWinner = w;
+        sim.message = `${name} STRIKES TRUE`;
+      }
     }
     sim.messageTimer = ROUND_END_FRAMES;
   }

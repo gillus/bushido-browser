@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CharacterDef, FighterState, Obstacle, WeaponDef } from '../sim/types';
 import {
-  JointName, kneelLegs, lockPose, movePoses, parryPose, Pose, staggerPose, stancePoses,
+  bowPose, JointName, kneelLegs, lockPose, movePoses, parryPose, Pose, staggerPose, stancePoses, throwPoses,
 } from './poses';
 import { Breakable, Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
 import {
@@ -593,6 +593,11 @@ export class FighterView {
       case 'stagger':  return { pose: staggerPose, rate: 14 };
       case 'flinch':   return { pose: staggerPose, rate: 20 };
       case 'lock':     return { pose: lockPose, rate: 22 };
+      case 'bow':      return { pose: bowPose, rate: 5 };
+      case 'throw':
+        return f.phaseFrame < this.throwWindup
+          ? { pose: throwPoses.windup, rate: 14 }
+          : { pose: throwPoses.release, rate: 32 };
       default:         return { pose: stancePoses[f.stance], rate: 10 };
     }
   }
@@ -600,6 +605,14 @@ export class FighterView {
   private liveObstacles: Obstacle[] = [];
   /** Glass the corpse can go through (the shop window), shared with the scene. */
   breakables: Breakable[] = [];
+  /** Frames a throw holds the cartridge before letting go (rules.json `carts.windup`). */
+  throwWindup = 12;
+
+  /** World position of the left hand — the throwing hand. */
+  leftHand(out: THREE.Vector3): THREE.Vector3 {
+    this.root.updateMatrixWorld(true);
+    return this.joints.get('elbowL')!.localToWorld(out.set(0, -this.dims.foreLen, 0));
+  }
   private shadowPos = new THREE.Vector3();
 
   /** Jump straight to `f`'s pose (a replay cutting back in time), no blending. */

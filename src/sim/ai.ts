@@ -1,4 +1,6 @@
-import { bladeObstruction, CLASH_WINDUP_TAIL, dist, effWindup, PARRY_WINDOW, SimConfig } from './sim';
+import {
+  BODY_RADIUS, bladeObstruction, CART_FROM, CLASH_WINDUP_TAIL, dist, effWindup, PARRY_WINDOW, SimConfig, TICK,
+} from './sim';
 import { EMPTY_INPUT, FighterState, InputFrame, Line, LINES, SimState } from './types';
 
 function mulberry32(seed: number): () => number {
@@ -25,7 +27,12 @@ export interface AIProfile {
   pokeWounded: [number, number];
   /** Frames to notice an opening (stagger, recovery…): [min, random extra]. */
   punishDelay: [number, number];
+  /** Frames between cartridge throws: [min, random extra]. */
+  throws: [number, number];
 }
+
+/** A cartridge on its way: the line it flies on, frames until it lands. */
+interface CartThreat { line: Line; eta: number; }
 
 const PLAN_ORDER: ThreatPlan[] = ['freeze', 'guard', 'parry', 'retreat', 'trade'];
 
@@ -45,9 +52,88 @@ export class AIController {
   private stanceTimer = 120;
   private lockRate = -1; // push presses per frame in the current lock; -1 = not locked
   private openingWait = -1; // frames left before punishing the current opening; -1 = none seen
+  // incoming cartridges get their own answer, rolled from the same odds
+  private noticedCart = false;
+  private cartReact = 0;
+  private cartPlan: ThreatPlan = 'guard';
+  private cartPlanDone = false;
+  private throwTimer: number;
 
   constructor(seed: number, private profile: AIProfile) {
     this.rng = mulberry32(seed);
+    this.throwTimer = profile.throws[0];
+  }
+
+  /** Roll an answer to a threat from the profile's odds. */
+  private rollPlan(): ThreatPlan {
+    let r = this.rng();
+    for (const p of PLAN_ORDER) {
+      const w = this.profile.plans[p] ?? 0;
+      if (r < w) return p;
+      r -= w;
+    }
+    return 'trade';
+  }
+
+  /**
+   * The opponent's cartridge, if one is coming at us: being thrown
+   * (aimed at us until it leaves the hand) or in the air on a path that
+   * will meet our body.
+   */
+  private incomingCart(sim: SimState, cfg: SimConfig, selfIndex: number): CartThreat | null {
+    const rules = cfg.carts;
+    if (!rules) return null;
+    const me = sim.fighters[selfIndex];
+    const op = sim.fighters[1 - selfIndex];
+    const perTick = rules.speed * TICK;
+    if (op.phase === 'throw' && op.phaseFrame < rules.windup) {
+      const flight = Math.max(0, dist(me, op) - CART_FROM - BODY_RADIUS) / perTick;
+      return { line: op.stance, eta: rules.windup - op.phaseFrame + flight };
+    }
+    for (const c of sim.carts) {
+      if (c.end || c.owner === selfIndex) continue;
+      const rx = me.pos.x - c.x, rz = me.pos.z - c.z;
+      const along = rx * c.dx + rz * c.dz;
+      const off = Math.abs(rx * c.dz - rz * c.dx);
+      if (along < 0 || off > BODY_RADIUS + 0.15) continue; // gone past, or not heading for us
+      return { line: c.line, eta: Math.max(0, along - BODY_RADIUS) / perTick };
+    }
+    return null;
+  }
+
+  /** Answer an incoming cartridge (the plan is rolled once per cart). */
+  private dodgeCart(cart: CartThreat, inp: InputFrame): InputFrame {
+    if (!this.noticedCart) {
+      this.noticedCart = true;
+      this.cartPlanDone = false;
+      this.cartReact = Math.floor(this.profile.reaction * (0.6 + this.rng() * 0.9));
+      this.cartPlan = this.rollPlan();
+    }
+    if (this.cartReact > 0) { this.cartReact--; return inp; }
+    if (this.cartPlanDone) {
+      if (this.cartPlan === 'retreat') inp.moveX = this.circleDir;
+      return inp;
+    }
+    switch (this.cartPlan) {
+      case 'freeze':
+        break;
+      case 'guard':
+        inp.stance = cart.line; // a guard on its line knocks it away
+        break;
+      case 'parry':
+        if (cart.eta > PARRY_WINDOW - 3) return inp; // not yet
+        inp.parry = true;
+        break;
+      case 'retreat':
+        inp.moveX = this.circleDir; // step off its path
+        inp.dash = true;
+        break;
+      case 'trade':
+        inp.moveY = 1; // take it and close the distance
+        break;
+    }
+    this.cartPlanDone = true;
+    return inp;
   }
 
   /** Roll [min, random extra] frames; no rng draw when there's no spread. */
@@ -141,6 +227,11 @@ export class AIController {
       return inp;
     }
     this.lockRate = -1;
+    if (me.phase === 'bow') {
+      // keep bowing — unless they've already stopped and are coming over
+      if (op.phase !== 'bow' && dist(me, op) < 3.4) inp.stance = me.stance;
+      return inp;
+    }
     if (me.phase !== 'idle') return inp; // committed; inputs would be dropped anyway
 
     const d = dist(me, op);
@@ -153,13 +244,7 @@ export class AIController {
         this.noticedThreat = true;
         this.planDone = false;
         this.reactLeft = Math.floor(this.profile.reaction * (0.6 + this.rng() * 0.9));
-        let r = this.rng();
-        this.plan = 'trade';
-        for (const p of PLAN_ORDER) {
-          const w = this.profile.plans[p] ?? 0;
-          if (r < w) { this.plan = p; break; }
-          r -= w;
-        }
+        this.plan = this.rollPlan();
       }
       if (this.reactLeft > 0) { this.reactLeft--; return inp; }
       if (!this.planDone) {
@@ -205,8 +290,13 @@ export class AIController {
     }
     this.noticedThreat = false;
 
+    const cart = this.incomingCart(sim, cfg, selfIndex);
+    if (cart) return this.dodgeCart(cart, inp);
+    this.noticedCart = false;
+
     // --- Punish windows ---
     const opening = op.phase === 'stagger' || op.phase === 'flinch' || op.phase === 'recovery'
+      || op.phase === 'throw' // past the release (before it, it's an incoming cart)
       || (op.phase === 'parry' && op.phaseFrame >= PARRY_WINDOW);
     if (!opening) this.openingWait = -1;
     else {
@@ -227,7 +317,7 @@ export class AIController {
       if (d < strikeRange && d > myMin) inp.attack = true;
       return inp;
     }
-    if (op.phase === 'recovery') {
+    if (op.phase === 'recovery' || op.phase === 'throw') {
       inp.moveY = d < myMin + 0.1 ? -1 : 1;
       if (d < strikeRange * 0.98 && d > myMin) inp.attack = true;
       else if (d < 3.0 && d > myMin && this.rng() < 0.3) inp.dash = true;
@@ -264,6 +354,19 @@ export class AIController {
         this.pokeTimer = this.frames(opWounded ? this.profile.pokeWounded : this.profile.poke);
       } else {
         this.pokeTimer = 20; // not in range yet, check again soon
+      }
+    }
+
+    // From out of their reach, throw a cartridge on a line they aren't guarding
+    if (!inp.attack && cfg.carts && me.carts > 0 && --this.throwTimer <= 0) {
+      const theirReach = oppMove.reach + oppMove.lunge * 0.12;
+      if (d > theirReach + 0.4 && d < 6.5) {
+        const open = LINES.filter((l) => l !== op.stance);
+        inp.stance = open[Math.floor(this.rng() * open.length)];
+        inp.throw = true;
+        this.throwTimer = this.frames(this.profile.throws);
+      } else {
+        this.throwTimer = 20;
       }
     }
 

@@ -6,7 +6,7 @@ import { GameEvent } from './events';
  * = P2. Keyboard keeps working alongside — main.ts merges the two.
  */
 export type PadAction =
-  | 'attack' | 'dash' | 'parry'
+  | 'attack' | 'dash' | 'parry' | 'throw'
   | 'stanceUp' | 'stanceDown' | 'high' | 'mid' | 'low'
   | 'toggleAI' | 'pause' | 'reset' | 'level';
 
@@ -20,7 +20,8 @@ const BUTTONS: [number, PadAction][] = [
   [6, 'stanceDown'],  // LT / L2
   [8, 'toggleAI'],    // Back / Share
   [9, 'pause'],       // Start / Options
-  [3, 'reset'],       // Y / Triangle — only honoured while paused
+  [3, 'throw'],       // Y / Triangle — throw a cartridge…
+  [3, 'reset'],       // …and, only while paused, reset the match
   [2, 'level'],       // X / Square — AI difficulty, only honoured while paused
 ];
 const DPAD = { up: 12, down: 13, left: 14, right: 15 };
@@ -131,6 +132,7 @@ export class GamepadInput {
       case 'parried': this.buzz(ev.who, 0.4, 0.8, 160); break;
       case 'deflect': this.buzz(ev.who, 0.2, 0.6, 110); break;
       case 'rebound': this.buzz(ev.who, 0.5, 0.5, 140); break;
+      case 'cart': if (ev.end === 'hit') this.buzz(ev.who, 0.3, 0.6, 120); break;
     }
   }
 

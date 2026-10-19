@@ -14,7 +14,7 @@ Each future stage = a location + a dumb argument that went too far.
 ## Commands
 
 - `npm run dev` — Vite dev server (usually already running on :5173)
-- `npm run build` — static bundle to `dist/` (~169 kB gzipped; keep it light —
+- `npm run build` — static bundle to `dist/` (~173 kB gzipped; keep it light —
   three's `ShapeGeometry` alone costs ~7 kB, hand-build small geometry)
 - `npx tsc --noEmit` — typecheck (no test runner; see Testing below)
 - Deploy: push to `main` on github.com/gillus/bushido-browser → Actions
@@ -45,7 +45,8 @@ Each future stage = a location + a dumb argument that went too far.
 - Menu keys + match flow (2026-10-19, `main.ts`): menu keys (Esc/P pause,
   M, L, R, H, N, F1) are read once per render frame and consumed
   (`pressedThisTick.delete`, `pads.take`), so they work while the sim is
-  held. Pad Start = pause; Y (△) resets only while paused. Blur and a hidden
+  held. Pad Start = pause; Y (△) resets only while paused (in play it
+  throws a cartridge). Blur and a hidden
   tab pause and drop held keys (a key held across alt-tab never sends its
   keyup). M, L, H and F1 choices persist in `localStorage` (`bushido.*`); the
   controls bar hides itself after the first round unless F1 chose. While
@@ -101,6 +102,41 @@ Each future stage = a location + a dumb argument that went too far.
   `SimState.obstacleState` (NOT in cfg — keeps state serializable for
   lockstep), resets each round; `createSim(cfg)` now takes the config.
   Render topple animation = `updateProps` in `scene.ts`.
+- Cartridge throw + honor code (2026-10-19, `src/data/rules.json` →
+  `SimConfig.carts` / `.honor`; both optional — absent, the sim is
+  bit-identical to before: 20-seed × 12-min still 1374–983):
+  **Shuriken-uchi:** `InputFrame.throw` → phase `'throw'` (aims while
+  winding up, releases at `windup`, unguarded through `recovery`);
+  `FighterState.carts` = ammo per round. `SimState.carts` holds every cart
+  thrown this round (spent ones stay, `end` + `endFrame` say how it
+  stopped) — flown by `updateCarts` in fixed 0.1 m steps, also during the
+  lock and the round-end linger (then it can't hit anyone). It flies on
+  its thrower's stance line at `heights[line]`: walls and solid props at
+  least that tall stop it, cardboard topples. Hitting the opponent: lock
+  → bounces off; parry window → swatted, defender back to idle; idle on
+  that line → deflected; else a FLINCH (never a wound; a stagger stays a
+  stagger). events.ts: `throw`, `cart` (with `end`), and `wound` now
+  fires on a NEW wound, not on entering flinch. Render: `carts.ts`
+  (`CartView`, driven from whichever state is on screen so the replay
+  rewinds it; labelled carts tumble end over end with a streak — a flat
+  spin was edge-on to the camera and invisible; loose ones bounce and lie
+  label-up), held in the left hand (`FighterView.leftHand`) through the
+  wind-up; `throwPoses`. Characters' render-only `cart` = shell colour.
+  **Honor:** fighters start each round in phase `'bow'` (`bowPose`) for
+  `bowFrames`; any input ends your own bow. `dishonorable()` in sim.ts:
+  a cut (kill or wound) or a cart hit landing on someone still bowing, or
+  arriving more than `backDeg` off their facing, sets
+  `FighterState.dishonored` (+ `dishonor` event, a beating-bell sound, HUD
+  tag); a dishonored winner's kill scores nothing. Back hits are rare —
+  facing tracks the opponent whenever free. The AI bows until it's over,
+  but rises early if the opponent stops bowing and comes within 3.4 m;
+  it throws from outside the opponent's reach on a line they aren't
+  guarding (`throws` in ai.json) and answers an incoming cart with the
+  same plan odds as a cut (guard its line / parry on arrival / sidestep
+  dash / walk through it). Measured with both on (20 seeds; normal 12
+  min, levels 6 min): normal-vs-normal 54.8% katana (from 58.3 — rounds
+  ~18% fewer from the bow; ~0.4 throws per round, about half hit); easy
+  28% / 30%, hard 74% / 52% (katana / broom vs normal).
 - Combat resolution priority in `sim.ts`: furniture rebound → blade clash (below) → active
   parry (any line, 8-frame window) → passive stance guard (matching line,
   idle only) → glancing wound (outer reach/arc: high/mid → arm, low → leg;
@@ -266,11 +302,14 @@ Each future stage = a location + a dumb argument that went too far.
   random extra] frames between probing cuts), `punishDelay` (frames to
   notice a stagger/recovery opening). A `[n, 0]` range draws no rng, so
   `normal` reproduces the pre-levels AI bit for bit — keep it that way;
-  balance numbers are normal-vs-normal. Measured vs normal (20 seeds × 6
-  min; normal's own baseline 58.3% katana / 41.7% broom): easy 31% as
-  katana, 30% as broom; hard 74% / 47%. Faster pokes made hard WORSE —
-  patience + parries is what wins. Smoke tests must pass a profile:
-  `new AIController(seed, aiJson.normal)`.
+  balance numbers are normal-vs-normal. Measured vs normal before carts
+  (20 seeds × 6 min; normal's own baseline 58.3% katana / 41.7% broom):
+  easy 31% as katana, 30% as broom; hard 74% / 47% (with carts + honor:
+  see above). Faster pokes made hard WORSE — patience + parries is what
+  wins. `throws` = [min, extra] frames between cartridge throws (only
+  drawn when `cfg.carts` is set). Smoke tests must pass a profile:
+  `new AIController(seed, aiJson.normal)` — and `carts`/`honor` from
+  rules.json in the SimConfig to test the game as shipped.
 - `src/data/flavor.json` — pre-round bicker lines ([p1,p2] pairs), shown
   on round start as PS1-RPG text windows (`dialogue.ts`, styles in
   `index.html`, 2026-10-17): one speaker at a time, name tab, typewriter

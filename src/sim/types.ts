@@ -34,6 +34,7 @@ export interface CharacterDef {
   weapon: string; // key into weapons.json
   glasses?: boolean; // render only: thick spectacles bar on the face
   portrait?: string; // render only: dialogue headshot, path relative to the page (public/)
+  cart?: string;     // render only: shell colour of the cartridges they throw
   shape?: CharacterShape; // render only: silhouette details
   outfit?: CharacterOutfit; // render only: clothes (default: gi)
 }
@@ -218,15 +219,55 @@ export interface InputFrame {
   dash: boolean;
   parry: boolean;
   stance: Line | null;    // direct stance select, null = keep
+  throw: boolean;         // throw a cartridge (edge-triggered)
 }
 
 export const EMPTY_INPUT: InputFrame = {
-  moveX: 0, moveY: 0, attack: false, dash: false, parry: false, stance: null,
+  moveX: 0, moveY: 0, attack: false, dash: false, parry: false, stance: null, throw: false,
 };
 
 export type FighterPhase =
-  | 'idle' | 'windup' | 'active' | 'recovery'
+  | 'bow' | 'idle' | 'windup' | 'active' | 'recovery' | 'throw'
   | 'parry' | 'stagger' | 'flinch' | 'lock' | 'dead';
+
+/**
+ * Shuriken-uchi (`src/data/rules.json` → `carts`): a thrown game cartridge
+ * flies straight along the thrower's stance line. It never cuts — a hit
+ * flinches. Frames are sim ticks.
+ */
+export interface CartRules {
+  name: string;
+  ammo: number;      // per fighter per round
+  windup: number;    // frames from the press to the release
+  recovery: number;  // frames after the release, unguarded
+  speed: number;     // m/s
+  range: number;     // m before it drops (wall-less stages)
+  heights: Record<Line, number>; // flight height per line: furniture at least this tall stops it
+}
+
+/**
+ * The honor code (`rules.json` → `honor`). Each round opens with a bow
+ * (`bowFrames`; any input breaks your own); landing a cut or a cartridge on
+ * an opponent still bowing, or from more than `backDeg` off their facing,
+ * is dishonorable — a dishonored fighter's kill that round scores nothing.
+ */
+export interface HonorRules {
+  bowFrames: number;
+  backDeg: number;
+}
+
+export type CartEnd = 'hit' | 'guard' | 'parry' | 'wall' | 'prop' | 'spent';
+
+/** A cartridge in flight (or, once `end` is set, where it stopped). */
+export interface Cart {
+  owner: number;
+  line: Line;
+  x: number; z: number;
+  dx: number; dz: number; // unit flight direction
+  flown: number;          // m travelled
+  end: CartEnd | null;    // null = still flying
+  endFrame: number;       // sim.frame it stopped
+}
 
 export type WoundRegion = 'arm' | 'leg';
 
@@ -246,6 +287,8 @@ export interface FighterState {
   staggerLen: number;     // frames for the current stagger (parried = longer)
   rebound: { x: number; z: number } | null; // where this attack's blade struck furniture or a wall (cleared on the next attack)
   score: number;
+  carts: number;          // cartridges left this round
+  dishonored: boolean;    // broke the honor code this round: a kill won't score
 }
 
 export type RoundPhase = 'fight' | 'end';
@@ -264,4 +307,6 @@ export interface SimState {
   /** Set once a fighter reaches `MATCH_WINS`: the match is over and the
    *  sim holds on the final corpse instead of starting another round. */
   matchWinner: number | null;
+  /** Every cartridge thrown this round, in throw order (spent ones stay). */
+  carts: Cart[];
 }

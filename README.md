@@ -28,7 +28,7 @@ npm install
 npm run dev      # then open the printed localhost URL
 ```
 
-`npm run build` produces a small static bundle in `dist/` (~169 kB gzipped).
+`npm run build` produces a small static bundle in `dist/` (~173 kB gzipped).
 
 ## Controls
 
@@ -39,6 +39,7 @@ npm run dev      # then open the printed localhost URL
 | Dash       | G           | ,             |
 | Parry      | Space       | /             |
 | Stance     | 1 / 2 / 3   | 8 / 9 / 0     |
+| Throw cart | T           | ;             |
 
 Gamepads (any pad the browser reports with the standard layout; Xbox names,
 PlayStation in brackets). The first pad connected is P1, the second is P2. Keyboard keeps working
@@ -50,6 +51,7 @@ alongside.
 | Attack     | A (✕) |
 | Dash       | B (○) |
 | Parry      | X (□) |
+| Throw cart | Y (△) |
 | Stance     | RB/RT raise · LB/LT lower — or flick the right stick: up Jodan, sideways Chudan, down Gedan |
 | Toggle AI  | Back (Share) |
 | Pause      | Start (Options) — then Y (△) resets the match, X (□) cycles the AI level |
@@ -113,6 +115,19 @@ Pads rumble when you're cut, killed, deflected or parried.
 - Simultaneous clean hits on *different* lines pass each other: an
   *ai-uchi*. Both fall, nobody scores. They would both insist this proves
   their point.
+- **Shuriken-uchi 手裏剣打ち.** You have three game cartridges in your
+  pockets each round (▮▮▮ by your stance). A throw flies straight along
+  your stance's line: Jodan at the head, Chudan at the chest, Gedan at
+  the shins. It never cuts — a hit just flinches, which cancels a wind-up
+  and buys a moment. A guard on that line knocks it away, a parry swats
+  it from any line, and tall enough furniture stops it. Throwing leaves
+  you open, so do it from out of reach. The cartridge in flight can be
+  sidestepped.
+- **The honor code.** Each round opens with a bow (*REI 礼*); any input
+  ends yours. Landing a cut or a cartridge on an opponent who is still
+  bowing, or hitting them in the back, is *DISHONOR 不名誉*: a dishonored
+  fighter's kill that round scores nothing. (The cartridge to the bowing
+  head is the classic.)
 - **First to three clean kills takes the match** (◆◆◇ by the names).
   Every kill lands with a beat of hitstop and then a slow-motion replay of
   the cut (attack or Enter skips it); the last one ends on *shobu ari* —
@@ -158,6 +173,9 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
   display table break when a corpse is flung
   into them or a fighter is shoved into them out of a blade lock
   (everything is repaired for the next round).
+- `rules.json` — the cartridge throw (`ammo`, `windup`, `recovery`,
+  `speed`, flight `heights` per line) and the honor code (`bowFrames`, and
+  `backDeg`: how far round behind someone a hit counts as "in the back").
 - `flavor.json` — the pre-round bickering lines (`[panzerLine, sticchioLine]`
   pairs), played out in RPG text boxes before each round. New stage = new
   argument.

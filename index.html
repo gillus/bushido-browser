@@ -21,6 +21,9 @@
     #p2 { top: 18px; right: 24px; font-size: 18px; text-align: right; }
     .stance { font-size: 13px; color: #7fc9a0; letter-spacing: 2px; }
     .wound { font-size: 12px; color: #d05050; letter-spacing: 2px; }
+    .carts { font-size: 12px; color: #e8d8b8; letter-spacing: 1px; }
+    .carts .spent { color: #4a5a50; }
+    .shame { font-size: 12px; color: #f08040; letter-spacing: 2px; }
     .weapon { font-size: 12px; color: #8a9a90; letter-spacing: 1px; }
     #msg {
       top: 22%; left: 0; right: 0; text-align: center;
@@ -175,7 +178,12 @@
       <tr><td>dash</td><td>G</td><td>,</td><td>B (○)</td></tr>
       <tr><td>parry</td><td>SPACE</td><td>/</td><td>X (□)</td></tr>
       <tr><td>stance</td><td>1 2 3</td><td>8 9 0</td><td>LB / RB · flick right stick</td></tr>
+      <tr><td>throw cart</td><td>T</td><td>;</td><td>Y (△)</td></tr>
     </table>
+    <div class="menu">
+      Each round opens with a bow (<b>REI 礼</b>) &mdash; any input ends yours. Hitting an opponent<br>
+      still bowing, or in the back, is <b>DISHONOR 不名誉</b>: your kill that round scores nothing.
+    </div>
     <div class="menu">
       <b>ESC · P · START</b> resume &nbsp;·&nbsp; <b>R · Y (△)</b> reset match &nbsp;·&nbsp; <b>M · BACK</b> toggle AI<br>
       <b>L · X (□)</b> AI level: <span class="level"></span><br>
@@ -183,9 +191,9 @@
     </div>
   </div>
   <div id="help" class="hud">
-    P1: WASD move &middot; F attack &middot; G dash &middot; SPACE parry &middot; 1/2/3 stance &nbsp;&nbsp;|&nbsp;&nbsp;
-    P2: arrows &middot; . attack &middot; , dash &middot; / parry &middot; 8/9/0 stance<br>
-    PAD: stick move &middot; A attack &middot; B dash &middot; X parry &middot; LB/RB stance (or flick right stick) &nbsp;&nbsp;|&nbsp;&nbsp;
+    P1: WASD move &middot; F attack &middot; G dash &middot; SPACE parry &middot; 1/2/3 stance &middot; T throw &nbsp;&nbsp;|&nbsp;&nbsp;
+    P2: arrows &middot; . attack &middot; , dash &middot; / parry &middot; 8/9/0 stance &middot; ; throw<br>
+    PAD: stick A B X Y &middot; LB/RB or right stick stance &nbsp;&nbsp;|&nbsp;&nbsp;
     M toggle AI &middot; L AI level &middot; R reset &middot; N sound &middot; ESC pause &middot; F1 hide this<br>
     match your stance to their cut to deflect &mdash; clean hits kill, glancing hits maim &mdash; there is no steel
   </div>
