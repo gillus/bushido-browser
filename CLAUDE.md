@@ -118,8 +118,9 @@ Each future stage = a location + a dumb argument that went too far.
 - Audio + rumble (2026-10-17): `events.ts` diffs a `snapshot()` taken before
   `stepSim` against the sim after it → `GameEvent`s (swing, deflect vs
   parried — told apart by the defender's pre-tick phase — wound, kill, dash,
-  footsteps synced to the leg swing `walkCycle * 5.2`, stance, topple,
-  roundStart). `audio.ts` (`Sfx`) synthesizes every sound with Web Audio —
+  stance, topple, roundStart). Footsteps are NOT diffed: each view counts
+  its own footfalls (`FighterView.footfalls`, from `gait.ts`) and main plays
+  one `step` per footfall in live play (zeroed in the replay). `audio.ts` (`Sfx`) synthesizes every sound with Web Audio —
   no audio files, ~3 kB gz. Sounds are what the props really make (cardboard
   thock, broom whoosh, sneaker squeak); the framing plays it straight
   (hyoshigi clappers on round start, one o-daiko hit per kill). Stages with
@@ -485,8 +486,29 @@ Each future stage = a location + a dumb argument that went too far.
   A leg wound merges `kneelLegs` over every pose with the pelvis at
   `KNEEL_HIP_Y` (fighterView.ts) — tuned so the cut leg's knee rests on the
   floor; walking kneeled plays a procedural knee-walk (front foot steps,
-  knee drags) timed to the same `walkCycle * 5.2` wave as the footstep
-  sounds, faded in/out by actual travel speed.
+  knee drags) on a `walkCycle * 5.2` wave (a scuff per stride), faded
+  in/out by actual travel speed.
+  **Planted feet (2026-10-20, `gait.ts`, `Feet`):** standing legs are
+  IK'd, not posed. Each foot stays planted in world space and steps one
+  at a time toward the pose's own ankle (`home`, the posed leg's FK)
+  carried ahead by the travel (measured per sim tick from the root), so a
+  guard keeps its front foot in front and advancing/retreating/circling is
+  a shuffle that never crosses: sideways the feet open and close
+  (`GAP_SIDE`, the leading foot lifts first), at speed the deep stance
+  gathers under the hips (`GATHER`). Step time = step length / speed,
+  clamped `STEP_FAST`..`STEP_SLOW` (the sidestep is a 0.07 s lunge in plant
+  mode). The hips come down where a foot is out of reach of a `REACH`-
+  straight leg (fast down, slow up), plus a footfall bob; a foot out of
+  reach even then is dragged after the hips (the sidestep's back foot).
+  Two-bone IK sets hip pitch + splay and the knee; the shoe stays level,
+  up on the ball while the heel is raised (`HEEL_MAX`), toe up mid-swing.
+  The torso leans into travel on a damped spring. Modes: `glide` = dash
+  (feet carried, lifted, hips crouched), `skid` = shoved out of a lock
+  (feet dragged), else `plant`. Kneeling skips it (the knee-walk above).
+  Measured (AI vs AI, 3 seeds × 2 min): planted feet slide ≤ 0.09 m/s
+  outside dashes/sidesteps/shoves (the bow's figure is the round-reset
+  teleport), IK never misses, ~150–180 footfalls a minute, ~0.035 ms a
+  frame for both fighters.
 - `src/render/parts.ts` — body-part geometry builders (lathe torso, tapered
   limbs, faceted heads, hair caps with a hairline, face features, glasses,
   hachimaki, street clothes: tee/emblem, hands, sneakers, cosplay layer:

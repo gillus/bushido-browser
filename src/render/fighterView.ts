@@ -5,6 +5,7 @@ import {
   stancePoses, throwPoses, unarmedPose,
 } from './poses';
 import { BladeAvoider, BladeShape, BladeWorld, Rod, clipLength, crossSide } from './bladeAvoid';
+import { Feet, FootMode, Leg } from './gait';
 import { Breakable, Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
 import {
   ballGeo, blobGeo, clothGeo, faceGroup, haoriGroup, haoriSleeveGeo, hairGroup, handGroup,
@@ -24,9 +25,11 @@ const DANGLE_DRAG = 0.09;    // tilt per m/s of travel
 const DANGLE_MAX_SPEED = 6;  // ignore teleports (round reset)
 const DOWN = new THREE.Vector3(0, -1, 0);
 
-// Footfalls land at the extremes of sin(walkCycle * STRIDE_FREQ) — events.ts
-// times the step sounds (and the kneeling knee-drag scuffs) off the same wave.
+// The kneeling knee-walk's cycle per m of travel; a knee-drag scuff at each
+// extreme of sin(walkCycle * STRIDE_FREQ). Standing, the feet step for
+// themselves (gait.ts) and count their own footfalls.
 const STRIDE_FREQ = 5.2;
+const strideIndex = (walkCycle: number): number => Math.floor((walkCycle * STRIDE_FREQ - Math.PI / 2) / Math.PI);
 // Pelvis height kneeling on the cut leg, as a fraction of standing
 const KNEEL_HIP_Y = 0.585;
 // …and stooping for a dropped weapon
@@ -140,6 +143,10 @@ export class FighterView {
   private time = 0;
   private lastWalk = 0;
   private gait = 0; // 0 standing still .. 1 travelling: fades the knee-walk in and out
+  private feet!: Feet;
+  private lastStride = 0;
+  /** Footfalls since main last played them (the step sound). */
+  footfalls = 0;
   private woundMats = {
     arm: [] as { mat: THREE.MeshLambertMaterial; orig: THREE.Color }[],
     leg: [] as { mat: THREE.MeshLambertMaterial; orig: THREE.Color }[],
@@ -375,6 +382,7 @@ export class FighterView {
 
     // legs — pivot at hip, hang along -Y
     const legW = 0.18 * Math.sqrt(b), thighLen = 0.42 * h, shinLen = 0.4 * h;
+    const legs: Leg[] = [];
     const mkLeg = (side: 1 | -1, hip: JointName, knee: JointName): void => {
       const hipG = new THREE.Group();
       hipG.position.set(side * 0.1 * b, -0.06 * h, 0);
@@ -426,6 +434,7 @@ export class FighterView {
         shoe.position.y = -shinLen + 0.023;
         shoe.traverse((o) => { o.userData.noTint = true; });
         kneeSkin.add(shoe);
+        legs.push({ hip: hipG, knee: kneeG, shoe });
       } else {
         hipSkin.add(mesh(clothGeo(legW * 0.69, legW * 0.88, thighLen), c.body));
         kneeSkin.add(mesh(ballGeo(legW * 0.46), c.trim));
@@ -436,6 +445,7 @@ export class FighterView {
         foot.position.set(0, -shinLen + 0.01, 0.05);
         gaiter.userData.noTint = foot.userData.noTint = true;
         kneeSkin.add(gaiter, foot);
+        legs.push({ hip: hipG, knee: kneeG, shoe: foot });
       }
       if (side === 1) this.collectTint('leg', hipSkin, kneeSkin);
       this.joints.set(hip, hipG);
@@ -443,6 +453,7 @@ export class FighterView {
     };
     mkLeg(1, 'hipR', 'kneeR');
     mkLeg(-1, 'hipL', 'kneeL');
+    this.feet = new Feet(this.hips, legs, thighLen, shinLen);
 
     // the weapon line through the grip, for keeping it out of the furniture
     const shaft = weapon.shaftLength - 0.4;
@@ -826,6 +837,7 @@ export class FighterView {
   snap(f: FighterState, liveObstacles?: Obstacle[]): void {
     for (const d of this.danglers) d.live = false; // reseed rather than spring across the cut
     this.rodSide = 0; // the weapons' sides from another moment don't hold
+    this.feet.reset();
     this.update(f, 1, liveObstacles);
   }
 
@@ -852,6 +864,7 @@ export class FighterView {
       this.body.visible = true;
       this.shadow.position.set(0, 0.004, 0);
       for (const d of this.danglers) d.live = false; // reseed after the respawn
+      this.feet.reset();
     }
 
     this.root.position.set(f.pos.x, 0, f.pos.z);
@@ -943,17 +956,30 @@ export class FighterView {
       targetHipY += haul * 0.04 * g;
     }
 
-    // walk: leg swing with a knee kick + slight bob layered over the stance
-    if (f.phase === 'idle' && !kneeling) {
-      const swing = Math.sin(f.walkCycle * STRIDE_FREQ) * 0.4;
-      this.joints.get('hipR')!.rotation.x += swing * 0.5;
-      this.joints.get('hipL')!.rotation.x -= swing * 0.5;
-      this.joints.get('kneeR')!.rotation.x += Math.max(0, swing) * 0.6;
-      this.joints.get('kneeL')!.rotation.x += Math.max(0, -swing) * 0.6;
-      targetHipY += Math.abs(Math.sin(f.walkCycle * STRIDE_FREQ)) * 0.015;
-    }
     this.hipY += (targetHipY - this.hipY) * Math.min(1, 8 * dt);
     this.hips.position.y = this.hipY;
+    if (kneeling) {
+      // the knee-walk scuffs once a stride (the round reset rewinds walkCycle)
+      const stride = strideIndex(f.walkCycle);
+      if (stride > this.lastStride && f.phase === 'idle') this.footfalls++;
+      this.lastStride = stride;
+      this.feet.release();
+    } else {
+      // the feet stay planted and step (gait.ts) — a sidestep too, out and
+      // closed; a dash carries them off the floor, a shove out of a lock drags them
+      const mode: FootMode = f.phase === 'idle' && f.dashLeft > 0 ? 'glide'
+        : f.phase === 'stagger' && f.dashLeft > 0 ? 'skid' : 'plant';
+      // the sidestep and the shove pose their own lean
+      this.feet.plan(this.root, dt, mode, mode === 'skid' || side !== 0 ? 0 : 1);
+      this.footfalls += this.feet.footfalls;
+      this.feet.footfalls = 0;
+      this.hips.position.y -= this.feet.hipDrop;
+      const torso = this.joints.get('torso')!;
+      torso.rotation.x += this.feet.leanF;
+      torso.rotation.z -= this.feet.leanS;
+      this.joints.get('head')!.rotation.x -= this.feet.leanF * 0.6; // eyes stay on them
+      this.feet.solve(this.root);
+    }
     this.avoidBlade(f, dt, target.rate);
     this.updateHull();
     this.updateDanglers(dt);

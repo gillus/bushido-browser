@@ -19,7 +19,7 @@ export type GameEvent =
   | { type: 'wound'; who: number; region: WoundRegion }
   | { type: 'kill'; who: number; mutual: boolean } // `who` died
   | { type: 'dash'; who: number }
-  | { type: 'step'; who: number; kneeling: boolean }
+  | { type: 'step'; who: number; kneeling: boolean } // a footfall: the views count them (FighterView.footfalls)
   | { type: 'stance'; who: number }
   | { type: 'topple'; prop: number }
   | { type: 'throw'; who: number }                // `who` let a cartridge go
@@ -38,18 +38,11 @@ export interface TickSnapshot {
   roundPhase: RoundPhase;
   lockBalance: number;
   fighters: {
-    phase: FighterPhase; stance: Line; dashLeft: number; step: number;
+    phase: FighterPhase; stance: Line; dashLeft: number;
     wounds: Record<WoundRegion, boolean>; dishonored: boolean; armed: boolean; overreach: boolean;
   }[];
   downs: boolean[];
   carts: (CartEnd | null)[];
-}
-
-// Footfalls land at the extremes of the leg swing, sin(walkCycle * 5.2) in
-// fighterView.ts — i.e. every π/5.2 m of travel.
-const STRIDE_FREQ = 5.2;
-function stepIndex(walkCycle: number): number {
-  return Math.floor((walkCycle * STRIDE_FREQ - Math.PI / 2) / Math.PI);
 }
 
 export function snapshot(sim: SimState): TickSnapshot {
@@ -59,7 +52,7 @@ export function snapshot(sim: SimState): TickSnapshot {
     lockBalance: sim.lockBalance,
     fighters: sim.fighters.map((f) => ({
       phase: f.phase, stance: f.stance, dashLeft: f.dashLeft,
-      step: stepIndex(f.walkCycle), wounds: { ...f.wounds }, dishonored: f.dishonored, armed: f.armed,
+      wounds: { ...f.wounds }, dishonored: f.dishonored, armed: f.armed,
       overreach: f.overreach,
     })),
     downs: sim.obstacleState.map((s) => s.down),
@@ -118,9 +111,6 @@ export function diffTick(before: TickSnapshot, sim: SimState): GameEvent[] {
     if (f.stance !== b.stance) out.push({ type: 'stance', who: i });
     if (f.overreach && !b.overreach) out.push({ type: 'slip', who: i });
     if (f.dashLeft > 0 && b.dashLeft <= 0) out.push({ type: 'dash', who: i });
-    if (f.phase !== 'dead' && stepIndex(f.walkCycle) > b.step) {
-      out.push({ type: 'step', who: i, kneeling: f.wounds.leg });
-    }
   }
 
   sim.obstacleState.forEach((s, i) => {

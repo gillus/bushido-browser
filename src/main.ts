@@ -346,7 +346,10 @@ function playReplay(dt: number): void {
   }
   const s = replay.current;
   const slow = dt * speed;
-  views.forEach((v, i) => v.update(s.fighters[i], slow, liveObstaclesOf(s)));
+  views.forEach((v, i) => {
+    v.update(s.fighters[i], slow, liveObstaclesOf(s));
+    v.footfalls = 0; // no footsteps in the replay
+  });
   hitboxes.forEach((h, i) => h.update(s.fighters[i]));
   carts.update(s, slow, views);
   hurled.update(s);
@@ -495,8 +498,10 @@ function frame(now: number): void {
   dialogue.update(dt);
 
   const liveObstacles = liveObstaclesOf(sim);
-  views[0].update(sim.fighters[0], dt, liveObstacles);
-  views[1].update(sim.fighters[1], dt, liveObstacles);
+  views.forEach((v, i) => {
+    v.update(sim.fighters[i], dt, liveObstacles);
+    for (; v.footfalls > 0; v.footfalls--) sfx.play({ type: 'step', who: i, kneeling: sim.fighters[i].wounds.leg });
+  });
   hitboxes[0].update(sim.fighters[0]);
   hitboxes[1].update(sim.fighters[1]);
   carts.update(sim, dt, views);
