@@ -47,8 +47,10 @@ Each future stage = a location + a dumb argument that went too far.
   smallest turn about the hand that clears it (8 directions around the
   weapon, raise preferred, the last direction kept unless another saves
   `SWITCH`; the hand itself inside a box → least length inside), eased in
-  at `AVOID_IN` (or the pose rate if faster) and out at `AVOID_OUT`. The left arm swings
-  so its hand follows the haft (not mid-throw). Cardboard is ignored
+  at `AVOID_IN` (or the pose rate if faster) and out at `AVOID_OUT`. In two-handed
+  phases the off hand is then IK'd onto the haft as shown (see Cuts
+  below); elsewhere the left arm swings so its hand follows the turn (not
+  mid-throw). Cardboard is ignored
   during a cut (the cut knocks it flat). Render only — hits are still the
   reach/arc wedge. Measured: random spots near furniture facing the
   opponent, broom 50/400 poses clipping → 2 (a cut through the standee, a
@@ -482,7 +484,41 @@ Each future stage = a location + a dumb argument that went too far.
   a path relative to the page: `portraits/<key>.png` → put the file in
   `public/portraits/`); until the file exists it's a placeholder — the
   initial on the shirt colour. Any image works (cropped square, `cover`).
-- `src/render/poses.ts` — joint Euler targets per stance/move phase.
+- `src/render/poses.ts` — joint Euler targets per stance/phase.
+  **Cuts (2026-10-20, `cuts.ts`):** cuts are NOT joint poses — they're
+  keyed in weapon space, in the torso's frame: the weapon hand's position
+  (from the shoulders' midpoint, in arm lengths), the weapon's direction
+  (hand → tip) and the torso/head Euler; the right arm reaches the hand by
+  two-bone IK (`reachArm`, elbow toward `POLE_R`) and the wrist turns the
+  weapon onto the direction. Separate arcs per weapon (`cutsFor`: the tube
+  cuts like a katana, the broom smashes/sweeps — Nagi-harai is a 130°
+  flat sweep, not the tube's thrust). Four stages, driven by the sim's
+  phase + frame plus the sub-tick fraction (`clockFrac`, so a hitstop
+  freezes it and the replay slows it): wind-up (cock, then a slow creep
+  deeper), **strike** = the wind-up's last `STRIKE_FRAMES` (6, the sim's
+  lunge tail) — cuts land on the first active tick and the hitstop
+  freezes there, so the weapon must already have arrived — active (cut
+  through), recovery (follow-through, a held moment, back to the guard of
+  `f.stance`). Catmull-Rom through the keys; each stage starts where the
+  last ended (`stageStart`), the wind-up from the pose as shown
+  (`measureCut`; a replay `snap` starts from the guard, `guards` = each
+  stance pose measured the same way). The layer blends over the base pose
+  by `cutW` (hands back at `CUT_OUT`, faster when cut short). Stagger and
+  flinch use the same layer: `KNOCKED`, the weapon flung up and out to its
+  own side (as Euler angles the broom ended levelled at the opponent's
+  face; weapon-in-body frames AI-vs-AI 357 → 173). The base pose under a
+  cut is the stance arms + legs (`cutPoses`: guard legs winding up, lunge
+  legs from the strike, guard late in the recovery) — the legs only place
+  the feet. **Two hands:** in `TWO_HANDED` phases the off hand is IK'd
+  onto the haft `grip` behind the weapon hand (tube 0.11 m, broom 0.32 —
+  its butt); where that's out of the arm's reach (Panzer's short arms in
+  every guard) `bringHandsTogether` draws the weapon hand toward the off
+  shoulder first, weapon angle kept, at most `HOLD_PULL`. **Trail**
+  (`trail.ts`): an additive ribbon over the weapon's outer stretch,
+  sampled through the strike and active frames, slerped between samples,
+  aged by the cut clock. Measured (AI vs AI, 3 seeds × 2 min): no NaN
+  (also through replay snaps), off-hand grip error ≤ 3 cm, ~0.04 ms a
+  frame for both fighters.
   A leg wound merges `kneelLegs` over every pose with the pelvis at
   `KNEEL_HIP_Y` (fighterView.ts) — tuned so the cut leg's knee rests on the
   floor; walking kneeled plays a procedural knee-walk (front foot steps,

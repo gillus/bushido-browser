@@ -45,72 +45,14 @@ export const stancePoses: Record<Line, Pose> = {
   },
 };
 
-interface MovePoseSet { windup: Pose; active: Pose; recovery: Pose; }
-
-export const movePoses: Record<Line, MovePoseSet> = {
-  // Shomen-giri: raise high over the head, cut straight down
-  high: {
-    windup: {
-      torso: [-0.18, 0, 0], head: [0.2, 0, 0],
-      shoulderR: [-2.9, -0.1, -0.2], elbowR: [-0.9, 0, 0], wristR: [0.85, 0, 0],
-      shoulderL: [-2.7, 0.15, 0.25], elbowL: [-1.0, 0, 0],
-      ...guardLegs,
-    },
-    active: {
-      torso: [0.38, 0, 0], head: [-0.15, 0, 0],
-      shoulderR: [-0.55, -0.1, -0.2], elbowR: [-0.12, 0, 0], wristR: [-0.35, 0, 0],
-      shoulderL: [-0.45, 0.15, 0.25], elbowL: [-0.25, 0, 0],
-      ...lungeLegs,
-    },
-    recovery: {
-      torso: [0.3, 0, 0], head: [-0.1, 0, 0],
-      shoulderR: [-0.35, -0.1, -0.22], elbowR: [-0.1, 0, 0], wristR: [-0.3, 0, 0],
-      shoulderL: [-0.3, 0.15, 0.28], elbowL: [-0.2, 0, 0],
-      ...lungeLegs,
-    },
-  },
-  // Tsuki: coil the arms, drive the point straight in
-  mid: {
-    windup: {
-      torso: [0.05, 0.18, 0], head: [-0.05, -0.15, 0],
-      shoulderR: [-0.8, -0.25, -0.3], elbowR: [-1.5, 0, 0], wristR: [-0.6, 0, 0],
-      shoulderL: [-0.7, 0.3, 0.35], elbowL: [-1.6, 0, 0],
-      ...guardLegs,
-    },
-    active: {
-      torso: [0.28, -0.12, 0], head: [-0.15, 0.1, 0],
-      shoulderR: [-1.4, -0.08, -0.15], elbowR: [-0.05, 0, 0], wristR: [-0.15, 0, 0],
-      shoulderL: [-1.3, 0.1, 0.2], elbowL: [-0.15, 0, 0],
-      ...lungeLegs,
-    },
-    recovery: {
-      torso: [0.15, 0, 0], head: [-0.05, 0, 0],
-      shoulderR: [-1.15, -0.15, -0.25], elbowR: [-0.4, 0, 0], wristR: [-0.4, 0, 0],
-      shoulderL: [-1.0, 0.2, 0.3], elbowL: [-0.6, 0, 0],
-      ...lungeLegs,
-    },
-  },
-  // Kiriage: blade trails low and right, rips up on the diagonal
-  low: {
-    windup: {
-      torso: [0.22, -0.35, 0], head: [-0.1, 0.3, 0],
-      shoulderR: [-0.15, -0.55, 0.35], elbowR: [-0.45, 0, 0], wristR: [-0.3, 0, 0],
-      shoulderL: [-0.3, 0.1, 0.4], elbowL: [-0.5, 0, 0],
-      ...guardLegs,
-    },
-    active: {
-      torso: [-0.08, 0.3, 0], head: [0.05, -0.25, 0],
-      shoulderR: [-1.95, 0.3, -0.35], elbowR: [-0.2, 0, 0], wristR: [0.25, 0, 0],
-      shoulderL: [-1.6, 0.05, 0.2], elbowL: [-0.3, 0, 0],
-      ...lungeLegs,
-    },
-    recovery: {
-      torso: [-0.02, 0.15, 0], head: [0, -0.1, 0],
-      shoulderR: [-2.2, 0.2, -0.3], elbowR: [-0.45, 0, 0], wristR: [0.4, 0, 0],
-      shoulderL: [-1.9, 0.1, 0.25], elbowL: [-0.55, 0, 0],
-      ...guardLegs,
-    },
-  },
+// A cut's arms, torso and head are keyed in weapon space (cuts.ts) and laid
+// over these; what's left of them is the legs, which place the feet:
+// planted in the guard while winding up, stepping into the lunge from the
+// strike on, and back to the guard late in the recovery
+export const cutPoses: Record<Line, { windup: Pose; lunge: Pose }> = {
+  high: { windup: { ...stancePoses.high }, lunge: { ...stancePoses.high, ...lungeLegs } },
+  mid: { windup: { ...stancePoses.mid }, lunge: { ...stancePoses.mid, ...lungeLegs } },
+  low: { windup: { ...stancePoses.low }, lunge: { ...stancePoses.low, ...lungeLegs } },
 };
 
 // Leg wound: right knee on the floor under the hip, left thigh level with

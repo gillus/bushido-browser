@@ -1,9 +1,12 @@
 import * as THREE from 'three';
-import { CharacterDef, FighterState, Obstacle, WeaponDef } from '../sim/types';
+import { effWindup } from '../sim/sim';
+import { CharacterDef, FighterState, Line, Obstacle, WeaponDef } from '../sim/types';
 import {
-  bowPose, feintPose, hurlPoses, JointName, kneelLegs, lockPose, movePoses, parryPose, pickupPose, Pose, staggerPose,
+  bowPose, cutPoses, feintPose, hurlPoses, JointName, kneelLegs, lockPose, parryPose, pickupPose, Pose, staggerPose,
   stancePoses, throwPoses, unarmedPose,
 } from './poses';
+import { CutAnim, CutPose, CutStageName, cutPose, cutsFor, KNOCKED, keyValues, reachArm, sampleCut, stageStart } from './cuts';
+import { Trail } from './trail';
 import { BladeAvoider, BladeShape, BladeWorld, Rod, clipLength, crossSide } from './bladeAvoid';
 import { Feet, FootMode, Leg } from './gait';
 import { Breakable, Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
@@ -50,6 +53,22 @@ const BODY_SKINS: SkinName[] = ['hips', 'torso', 'head', 'hipR', 'kneeR', 'hipL'
 // Phases whose weapon holds its line when the two weapons meet; the other
 // one gives way (a cut stops on a guard). Even → the longer weapon gives.
 const HOLDS: ReadonlySet<string> = new Set(['idle', 'parry', 'lock']);
+// Cuts (cuts.ts): the strike is the wind-up's last frames — the sim's lunge
+// tail — so the weapon arrives by the first active tick, when a cut lands
+const STRIKE_FRAMES = 6;
+const CUT_PHASES: ReadonlySet<string> = new Set(['windup', 'active', 'recovery']);
+const CUT_OUT = 14; // 1/s the cut layer hands back to the pose after a cut…
+const CUT_KNOCKED = 30; // …and when it's cut short (deflected, parried, locked, struck): the weapon is knocked away
+const KNOCK_RATE = 18;  // 1/s the weapon flies out to KNOCKED (a stagger, a flinch)
+const KNOCKED_POSE = keyValues(KNOCKED, cutPose());
+// Phases the off hand holds the haft in (by IK); elsewhere it's posed free
+const TWO_HANDED: ReadonlySet<string> = new Set(['idle', 'windup', 'active', 'recovery', 'feint', 'parry', 'lock', 'sidestep']);
+const GRIP_RATE = 12;
+const HOLD_REACH = 0.97; // of the arm's length: the furthest the off hand reaches for its grip…
+const HOLD_PULL = 0.15;  // …and m the weapon hand comes in, at most, to bring it there
+// Where the elbows point (torso frame): out to the side, down, a little back
+const POLE_R = new THREE.Vector3(0.75, -0.6, -0.3).normalize();
+const POLE_L = new THREE.Vector3(-0.75, -0.6, -0.3).normalize();
 
 interface Dangler {
   node: THREE.Object3D;
@@ -121,7 +140,9 @@ function blobShadow(radius: number): THREE.Mesh {
  * Articulated low-poly fighter on a group hierarchy. Body parts come from
  * `parts.ts`; the skeleton's joint layout is unchanged from the original
  * box-man so poses.ts still applies. Poses are joint Euler targets,
- * exponentially damped each frame.
+ * exponentially damped each frame; cuts and the knocked-wide stagger are
+ * laid over them in weapon space (cuts.ts), the legs are IK'd to planted
+ * feet (gait.ts) and the off hand to the haft.
  *
  * Every joint holds its own meshes in a "skin" group, separate from its
  * child joints. The death ragdoll clones those skins, so the corpse always
@@ -156,7 +177,7 @@ export class FighterView {
   private ragdoll: Ragdoll | null = null;
   private danglers: Dangler[] = [];
   private dims!: {
-    h: number; foreLen: number; shinLen: number;
+    h: number; upperLen: number; foreLen: number; shinLen: number;
     tipLen: number; // hand to weapon tip
   };
 
@@ -468,7 +489,7 @@ export class FighterView {
     this.rodPool = this.blade.rods.map((p) => ({ a: new THREE.Vector3(), b: new THREE.Vector3(), r: p.r }));
 
     this.dims = {
-      h, foreLen, shinLen,
+      h, upperLen, foreLen, shinLen,
       tipLen: weapon.look === 'tube'
         ? weapon.bladeLength + 0.18
         : weapon.shaftLength > 0
@@ -477,6 +498,20 @@ export class FighterView {
     };
 
     for (const j of JOINTS) this.current.set(j, new THREE.Euler());
+
+    // cuts: the arcs for this weapon, and each guard in the same terms (a
+    // recovery ends on one; a cut seen from its middle starts from one)
+    this.cuts = cutsFor(weapon.look, weapon.shaftLength > 0);
+    for (const line of ['high', 'mid', 'low'] as const) {
+      for (const j of JOINTS) this.joints.get(j)!.rotation.set(...(stancePoses[line][j] ?? [0, 0, 0]));
+      this.measureCut(this.guards[line]);
+    }
+    for (const j of JOINTS) this.joints.get(j)!.rotation.set(0, 0, 0);
+    // the off hand holds the haft this far behind the weapon hand: at the
+    // tube's end (hands together, as on a hilt), at the broom's butt
+    this.grip = weapon.shaftLength > 0 ? 0.32 : 0.11;
+    const tip = this.dims.tipLen;
+    this.trail = new Trail(weapon.shaftLength > 0 ? tip - weapon.bladeLength - 0.3 : tip * 0.3, tip, '#dfe6ff');
 
     this.root.traverse((o) => {
       if (o.userData.dangle === undefined) return;
@@ -493,6 +528,142 @@ export class FighterView {
   private parentQ = new THREE.Quaternion();
   private tmpV = new THREE.Vector3();
   private tmpT = new THREE.Vector3();
+
+  // cuts (cuts.ts)
+  private cuts!: Record<Line, CutAnim>;
+  private guards: Record<Line, CutPose> = { high: cutPose(), mid: cutPose(), low: cutPose() };
+  private cutFrom = cutPose();  // where this cut's wind-up started
+  private cutStart = cutPose(); // where the current stage started
+  private cutNow = cutPose();   // this frame's (held while it hands back)
+  private cutW = 0;             // 1 in a cut, easing to 0 after
+  private gripW = 0;            // the off hand on the haft, eased
+  private grip = 0.11;
+  private trail!: Trail;
+  private snapping = false;
+  // the cut's clock: the sim's phase and frame, and how far past that frame
+  // the picture is (frozen in a hitstop, slowed in the replay)
+  private clockPhase = '';
+  private clockFrame = -1;
+  private clockFrac = 0;
+  private cutQ = new THREE.Quaternion();
+  private cutQ2 = new THREE.Quaternion();
+  private ikQ = new THREE.Quaternion();
+  private cutE = new THREE.Euler();
+  private cutD = new THREE.Vector3();
+  private baseQ = [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()];
+
+  /** The joints as they stand, in the terms of a cut (cuts.ts). */
+  private measureCut(out: CutPose): CutPose {
+    this.root.updateMatrixWorld(true);
+    const torso = this.joints.get('torso')!, head = this.joints.get('head')!, wrist = this.joints.get('wristR')!;
+    const hand = torso.worldToLocal(wrist.getWorldPosition(this.tmpV));
+    const dir = torso.worldToLocal(wrist.localToWorld(this.tmpT.set(0, -1, 0))).sub(hand).normalize();
+    const A = this.dims.upperLen + this.dims.foreLen;
+    const sy = this.joints.get('shoulderR')!.position.y;
+    out[0] = hand.x / A; out[1] = (hand.y - sy) / A; out[2] = hand.z / A;
+    out[3] = dir.x; out[4] = dir.y; out[5] = dir.z;
+    out[6] = torso.rotation.x; out[7] = torso.rotation.y; out[8] = torso.rotation.z;
+    out[9] = head.rotation.x; out[10] = head.rotation.y; out[11] = head.rotation.z;
+    return out;
+  }
+
+  /** Which stage of a cut `f` is in, and how far (null outside a cut). */
+  private cutStage(f: FighterState): { stage: CutStageName; t: number } | null {
+    if (!f.armed || !f.move) return null;
+    const p = f.phaseFrame + this.clockFrac;
+    switch (f.phase) {
+      case 'windup': {
+        const w = effWindup(f, f.move);
+        const s = Math.min(STRIKE_FRAMES, Math.floor(w / 2));
+        return p < w - s ? { stage: 'windup', t: p / (w - s) } : { stage: 'strike', t: (p - (w - s)) / s };
+      }
+      case 'active': return { stage: 'active', t: p / f.move.active };
+      case 'recovery': return { stage: 'recovery', t: p / f.move.recovery };
+      default: return null;
+    }
+  }
+
+  /** Lay the cut `p` over the pose by `w`: torso, head, and the weapon arm by IK, the wrist aiming the weapon. */
+  private applyCut(p: CutPose, w: number): void {
+    const { upperLen: U, foreLen: F } = this.dims;
+    const torso = this.joints.get('torso')!, head = this.joints.get('head')!;
+    torso.quaternion.slerp(this.cutQ.setFromEuler(this.cutE.set(p[6], p[7], p[8])), w);
+    head.quaternion.slerp(this.cutQ.setFromEuler(this.cutE.set(p[9], p[10], p[11])), w);
+    const arm = [this.joints.get('shoulderR')!, this.joints.get('elbowR')!, this.joints.get('wristR')!];
+    arm.forEach((j, i) => this.baseQ[i].copy(j.quaternion));
+    const [sh, el, wr] = arm;
+    const A = U + F;
+    reachArm(sh, el, U, F, this.tmpV.set(p[0] * A, sh.position.y + p[1] * A, p[2] * A), POLE_R);
+    // the wrist turns the weapon from the forearm's line onto `dir`, the least turn
+    const fore = this.cutQ.multiplyQuaternions(sh.quaternion, el.quaternion);
+    const along = this.tmpT.set(0, -1, 0).applyQuaternion(fore);
+    const aim = this.cutQ2.setFromUnitVectors(along, this.cutD.set(p[3], p[4], p[5]));
+    wr.quaternion.copy(fore).invert().multiply(aim).multiply(fore);
+    arm.forEach((j, i) => {
+      this.ikQ.copy(j.quaternion);
+      j.quaternion.copy(this.baseQ[i]).slerp(this.ikQ, w);
+    });
+  }
+
+  /**
+   * Two hands on one weapon: where the off hand's grip is out of its arm's
+   * reach (Panzer's short arms in every guard), the weapon hand comes in
+   * toward the off shoulder by the difference — the weapon keeps its angle.
+   * Before the weapon avoidance, so what it publishes is where the weapon is.
+   */
+  private bringHandsTogether(f: FighterState, dt: number): void {
+    const want = f.armed && TWO_HANDED.has(f.phase) ? 1 : 0;
+    this.gripW += (want - this.gripW) * Math.min(1, GRIP_RATE * dt);
+    if (this.gripW < 0.01) return;
+    this.root.updateMatrixWorld(true);
+    const torso = this.joints.get('torso')!, wrist = this.joints.get('wristR')!;
+    const hand = torso.worldToLocal(wrist.getWorldPosition(this.tmpV));
+    const at = torso.worldToLocal(wrist.localToWorld(this.tmpT.set(0, this.grip, 0)));
+    const sh = this.joints.get('shoulderL')!;
+    const dist = at.distanceTo(sh.position), reach = (this.dims.upperLen + this.dims.foreLen) * HOLD_REACH;
+    if (dist <= reach) return;
+    // (bounded: letting go, the off hand's grip flies wide with the pose)
+    const pull = Math.min(dist - reach, HOLD_PULL) * this.gripW;
+    hand.addScaledVector(at.sub(sh.position), -pull / dist);
+    // re-reach the weapon hand, the weapon held as it was
+    const shR = this.joints.get('shoulderR')!, elR = this.joints.get('elbowR')!;
+    const held = this.cutQ2.multiplyQuaternions(shR.quaternion, elR.quaternion).multiply(wrist.quaternion);
+    reachArm(shR, elR, this.dims.upperLen, this.dims.foreLen, hand, POLE_R);
+    wrist.quaternion.multiplyQuaternions(shR.quaternion, elR.quaternion).invert().multiply(held);
+  }
+
+  /** The off hand onto the haft (IK), behind the weapon hand as the weapon is shown. */
+  private gripHaft(): void {
+    if (this.gripW < 0.01) return;
+    this.root.updateMatrixWorld(true);
+    const torso = this.joints.get('torso')!, wrist = this.joints.get('wristR')!;
+    const hand = wrist.getWorldPosition(this.tmpV);
+    const along = wrist.localToWorld(this.tmpT.set(0, -this.grip, 0)).sub(hand);
+    const target = torso.worldToLocal(hand.sub(along));
+    const sh = this.joints.get('shoulderL')!, el = this.joints.get('elbowL')!;
+    this.baseQ[0].copy(sh.quaternion);
+    this.baseQ[1].copy(el.quaternion);
+    reachArm(sh, el, this.dims.upperLen, this.dims.foreLen, target, POLE_L);
+    [sh, el].forEach((j, i) => {
+      this.ikQ.copy(j.quaternion);
+      j.quaternion.copy(this.baseQ[i]).slerp(this.ikQ, this.gripW);
+    });
+  }
+
+  /** The swoosh: sampled through the strike and the cut, aged by the cut's clock. */
+  private updateTrail(f: FighterState, cut: { stage: CutStageName; t: number } | null, adv: number): void {
+    if (!this.trail.mesh.parent && this.root.parent) this.root.parent.add(this.trail.mesh);
+    const swinging = cut !== null && (
+      (cut.stage === 'strike' && cut.t > 0.15) || cut.stage === 'active' || (cut.stage === 'recovery' && cut.t < 0.1));
+    if (swinging && f.armed) {
+      this.root.updateMatrixWorld(true);
+      const wrist = this.joints.get('wristR')!;
+      const hand = wrist.getWorldPosition(this.tmpV);
+      const dir = wrist.localToWorld(this.tmpT.set(0, -1, 0)).sub(hand).normalize();
+      this.trail.push(hand, dir);
+    }
+    this.trail.update(adv);
+  }
 
   /** Swing the cloth pivots (see DANGLE_*). Call after the pose is applied. */
   private updateDanglers(dt: number): void {
@@ -747,9 +918,16 @@ export class FighterView {
   private targetFor(f: FighterState): { pose: Pose; rate: number } {
     switch (f.phase) {
       // a chained cut has less time to wind up: snap into it
-      case 'windup':   return { pose: movePoses[f.move!.line].windup, rate: f.chain > 0 ? 15 : 9 };
-      case 'active':   return { pose: movePoses[f.move!.line].active, rate: 34 };
-      case 'recovery': return { pose: movePoses[f.move!.line].recovery, rate: 5 };
+      // (the arms are the cut's, cuts.ts: these place the feet)
+      case 'windup':
+        return effWindup(f, f.move!) - f.phaseFrame > STRIKE_FRAMES
+          ? { pose: cutPoses[f.move!.line].windup, rate: f.chain > 0 ? 15 : 9 }
+          : { pose: cutPoses[f.move!.line].lunge, rate: 20 };
+      case 'active':   return { pose: cutPoses[f.move!.line].lunge, rate: 20 };
+      case 'recovery':
+        return f.phaseFrame < f.move!.recovery / 2
+          ? { pose: cutPoses[f.move!.line].lunge, rate: 20 }
+          : { pose: stancePoses[f.stance], rate: 6 };
       case 'feint':    // reined in, then settling into the (maybe new) guard
         return f.phaseFrame < this.feintRecovery / 2
           ? { pose: feintPose, rate: 22 }
@@ -838,7 +1016,11 @@ export class FighterView {
     for (const d of this.danglers) d.live = false; // reseed rather than spring across the cut
     this.rodSide = 0; // the weapons' sides from another moment don't hold
     this.feet.reset();
+    this.trail.clear();
+    this.clockPhase = ''; // a cut seen from here starts from its guard
+    this.snapping = true;
     this.update(f, 1, liveObstacles);
+    this.snapping = false;
   }
 
   update(f: FighterState, dt: number, liveObstacles?: Obstacle[]): void {
@@ -852,6 +1034,7 @@ export class FighterView {
         this.spawnRagdoll(f);
       }
       this.ragdoll!.step(dt);
+      this.trail.update(dt);
       // the shadow slides along under the falling pelvis
       this.shadowPos.copy(this.ragdoll!.getPos('pelvis'));
       this.root.worldToLocal(this.shadowPos);
@@ -878,6 +1061,31 @@ export class FighterView {
     this.facing += dy * Math.min(1, 14 * dt);
     this.root.rotation.y = this.facing;
 
+    // the cut's clock (and how much cut time this frame showed)
+    const was = this.clockPhase;
+    let adv = dt;
+    if (f.phase !== this.clockPhase || f.phaseFrame !== this.clockFrame) {
+      this.clockPhase = f.phase;
+      this.clockFrame = f.phaseFrame;
+      this.clockFrac = 0;
+    } else {
+      const frac = Math.min(0.999, this.clockFrac + dt * 60);
+      adv = (frac - this.clockFrac) / 60;
+      this.clockFrac = frac;
+    }
+    const cut = this.cutStage(f);
+    if (cut && (f.phase === 'windup' ? was !== 'windup' : !CUT_PHASES.has(was))) {
+      // a cut winds up from wherever the weapon is (from its guard, seen from mid-way)
+      if (f.phase === 'windup' && !this.snapping) this.measureCut(this.cutFrom);
+      else this.cutFrom.splice(0, 12, ...this.guards[f.move!.line]);
+    }
+    // knocked wide: the cut layer takes the weapon from wherever it's shown
+    const knocked = f.armed && (f.phase === 'stagger' || f.phase === 'flinch');
+    if (knocked && this.cutW < 0.999) {
+      this.measureCut(this.cutNow);
+      this.cutW = 1;
+    }
+
     const target = this.targetFor(f);
     const kneeling = f.wounds.leg;
     const pose: Pose = kneeling ? { ...target.pose, ...kneelLegs } : target.pose;
@@ -891,6 +1099,18 @@ export class FighterView {
       cur.z += (t[2] - cur.z) * k;
       this.joints.get(j)!.rotation.copy(cur);
     }
+    if (cut) {
+      const anim = this.cuts[f.move!.line], guard = this.guards[f.stance];
+      stageStart(anim, cut.stage, this.cutFrom, guard, this.cutStart);
+      sampleCut(anim, cut.stage, cut.t, this.cutStart, guard, this.cutNow);
+      this.cutW = 1;
+    } else if (knocked) {
+      const k = 1 - Math.exp(-KNOCK_RATE * dt);
+      for (let i = 0; i < 12; i++) this.cutNow[i] += (KNOCKED_POSE[i] - this.cutNow[i]) * k;
+      const d = Math.hypot(this.cutNow[3], this.cutNow[4], this.cutNow[5]) || 1;
+      for (let i = 3; i < 6; i++) this.cutNow[i] /= d;
+    } else this.cutW *= Math.exp(-(f.phase === 'idle' || f.phase === 'feint' ? CUT_OUT : CUT_KNOCKED) * dt);
+    if (this.cutW > 0.002) this.applyCut(this.cutNow, this.cutW);
 
     if (f.phase === 'lock') {
       // straining: a fast tremor through the arms and shoulders
@@ -980,7 +1200,10 @@ export class FighterView {
       this.joints.get('head')!.rotation.x -= this.feet.leanF * 0.6; // eyes stay on them
       this.feet.solve(this.root);
     }
+    this.bringHandsTogether(f, dt);
     this.avoidBlade(f, dt, target.rate);
+    this.gripHaft();
+    this.updateTrail(f, cut, adv);
     this.updateHull();
     this.updateDanglers(dt);
 
