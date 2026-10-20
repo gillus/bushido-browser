@@ -4,7 +4,7 @@ import {
   bowPose, feintPose, hurlPoses, JointName, kneelLegs, lockPose, movePoses, parryPose, pickupPose, Pose, staggerPose,
   stancePoses, throwPoses, unarmedPose,
 } from './poses';
-import { BladeAvoider, BladeShape } from './bladeAvoid';
+import { BladeAvoider, BladeShape, BladeWorld, Rod, clipLength, crossSide } from './bladeAvoid';
 import { Breakable, Ragdoll, RagdollParticleInit, RagdollSegmentInit } from './ragdoll';
 import {
   ballGeo, blobGeo, clothGeo, faceGroup, haoriGroup, haoriSleeveGeo, hairGroup, handGroup,
@@ -44,6 +44,9 @@ const FLOOR_SINK = 0.06;
 // The skins the opponent's weapon stays out of: not the arms — the blades
 // cross in front of the hands in every guard
 const BODY_SKINS: SkinName[] = ['hips', 'torso', 'head', 'hipR', 'kneeR', 'hipL', 'kneeL'];
+// Phases whose weapon holds its line when the two weapons meet; the other
+// one gives way (a cut stops on a guard). Even → the longer weapon gives.
+const HOLDS: ReadonlySet<string> = new Set(['idle', 'parry', 'lock']);
 
 interface Dangler {
   node: THREE.Object3D;
@@ -442,11 +445,16 @@ export class FighterView {
     mkLeg(-1, 'hipL', 'kneeL');
 
     // the weapon line through the grip, for keeping it out of the furniture
+    const shaft = weapon.shaftLength - 0.4;
     this.blade = weapon.look === 'tube'
-      ? { back: 0.12, fwd: weapon.bladeLength + 0.18, r: 0.04 }
+      ? { back: 0.12, fwd: bl + 0.18, r: 0.04, rods: [{ from: -0.12, to: bl + 0.18, r: 0.03 }] }
       : weapon.shaftLength > 0
-        ? { back: 0.4, fwd: weapon.shaftLength - 0.4 + weapon.bladeLength, r: 0.06 }
-        : { back: 0.17, fwd: weapon.bladeLength + 0.07, r: 0.03 };
+        ? {
+          back: 0.4, fwd: shaft + bl, r: 0.06,
+          rods: [{ from: -0.4, to: shaft, r: 0.018 }, { from: shaft, to: shaft + bl, r: weapon.look === 'broom' ? 0.05 : 0.02 }],
+        }
+        : { back: 0.17, fwd: bl + 0.07, r: 0.03, rods: [{ from: -0.17, to: bl + 0.07, r: 0.02 }] };
+    this.rodPool = this.blade.rods.map((p) => ({ a: new THREE.Vector3(), b: new THREE.Vector3(), r: p.r }));
 
     this.dims = {
       h, foreLen, shinLen,
@@ -509,7 +517,8 @@ export class FighterView {
 
   /**
    * Turn the weapon about the hand, out of any furniture, wall, floor,
-   * ceiling or opponent's body the pose put it into (bladeAvoid.ts).
+   * ceiling, opponent's body or opponent's weapon the pose put it into
+   * (bladeAvoid.ts), then publish it as `rods`.
    * Render only: the sim's blade is the reach/arc wedge, and a cut into
    * furniture already rebounds there.
    */
@@ -518,8 +527,12 @@ export class FighterView {
     const goal = this.avoidGoal.identity();
     this.root.updateMatrixWorld(true);
     const hand = wrist.getWorldPosition(this.handPos);
+    const d = wrist.localToWorld(this.bladeDir.set(0, -1, 0)).sub(hand).normalize();
+    this.holds = HOLDS.has(f.phase);
+    this.rods.length = 0;
+    const opp = this.opponent;
+    let gives = false;
     if (f.armed) {
-      const d = wrist.localToWorld(this.bladeDir.set(0, -1, 0)).sub(hand).normalize();
       const reach = Math.max(this.blade.back, this.blade.fwd) + this.blade.r;
       const boxes = this.bladeBoxes;
       boxes.length = 0;
@@ -532,12 +545,37 @@ export class FighterView {
       }
       for (const b of this.breakables) if (!b.solid && !b.broken && near(b.ob)) boxes.push(b.ob);
       this.forward.set(Math.sin(this.facing), 0, Math.cos(this.facing));
-      // a landing cut stops at the skin instead of passing through
-      this.avoider.solve(hand, d, this.forward, this.blade,
-        { boxes, bodies: this.opponent?.hull ?? [], floor: -FLOOR_SINK, ceiling: this.ceiling }, goal);
+      // a landing cut stops at the skin instead of passing through; where
+      // the weapons meet, one gives way to the other
+      gives = opp !== null && (opp.holds !== this.holds ? opp.holds
+        : opp.blade.fwd !== this.blade.fwd ? this.blade.fwd > opp.blade.fwd : this.serial > opp.serial);
+      this.avoider.solve(hand, d, this.forward, this.blade, {
+        boxes, bodies: opp?.hull ?? [], rods: gives ? opp!.rods : [], rodSide: this.rodSide,
+        floor: -FLOOR_SINK, ceiling: this.ceiling,
+      }, goal);
     }
     const out = goal.w > 0.99999;
     this.avoidQ.slerp(goal, 1 - Math.exp(-(out ? AVOID_OUT : Math.max(AVOID_IN, rate)) * dt));
+    if (gives) {
+      // a swinging weapon outruns the ease: where easing would leave this
+      // one inside the other, it's knocked straight to the goal
+      this.rodWorld.rods = opp!.rods;
+      this.rodWorld.rodSide = this.rodSide;
+      const shown = this.tmpT.copy(d).applyQuaternion(this.avoidQ);
+      if (clipLength(hand, shown, this.blade, this.rodWorld) > 0) this.avoidQ.copy(goal);
+    }
+    this.rodSide = 0;
+    if (f.armed) {
+      // the weapon as shown, for the opponent's weapon to meet
+      d.applyQuaternion(this.avoidQ);
+      if (opp) this.rodSide = crossSide(hand, d, this.blade, opp.rods);
+      this.blade.rods.forEach((p, i) => {
+        const rod = this.rodPool[i];
+        rod.a.copy(hand).addScaledVector(d, p.from);
+        rod.b.copy(hand).addScaledVector(d, p.to);
+        this.rods.push(rod);
+      });
+    }
     if (this.avoidQ.w > 0.99999) return;
     // a world turn about the hand, in the wrist's parent space
     this.turnJoint(wrist, this.avoidQ);
@@ -749,6 +787,15 @@ export class FighterView {
   opponent: FighterView | null = null;
   /** This body as yawed boxes (one per `BODY_SKINS`, as posed last frame); empty once dead. */
   hull: Obstacle[] = [];
+  /** This weapon as posed last frame (capsules along it); empty unarmed or dead. */
+  rods: Rod[] = [];
+  /** Whether this weapon holds its line where the weapons meet (`HOLDS`). */
+  holds = false;
+  private rodPool: Rod[];
+  private rodWorld: BladeWorld = { boxes: [], bodies: [], rods: [], rodSide: 0, floor: -Infinity, ceiling: Infinity };
+  private rodSide = 0; // which side of the opponent's weapon this one was on (crossSide)
+  private serial = FighterView.count++;
+  private static count = 0;
   private bodyPool: Obstacle[] = BODY_SKINS.map(() => ({ x: 0, z: 0, halfW: 0, halfD: 0, y0: 0, y1: 0, c: 1, s: 0 }));
   private rootInv = new THREE.Matrix4();
   private meshToRoot = new THREE.Matrix4();
@@ -778,6 +825,7 @@ export class FighterView {
   /** Jump straight to `f`'s pose (a replay cutting back in time), no blending. */
   snap(f: FighterState, liveObstacles?: Obstacle[]): void {
     for (const d of this.danglers) d.live = false; // reseed rather than spring across the cut
+    this.rodSide = 0; // the weapons' sides from another moment don't hold
     this.update(f, 1, liveObstacles);
   }
 
@@ -786,6 +834,7 @@ export class FighterView {
     this.time += dt;
     if (f.phase === 'dead') {
       this.hull.length = 0;
+      this.rods.length = 0;
       if (!this.ragdoll) {
         this.root.position.set(f.pos.x, 0, f.pos.z);
         this.spawnRagdoll(f);

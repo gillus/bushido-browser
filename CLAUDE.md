@@ -67,6 +67,21 @@ Each future stage = a location + a dumb argument that went too far.
   7, broom 127 → 37, all within 0.9 m and mostly the hand itself inside
   (a turn about the hand can't help) — the sim only lets them that close
   outside a lock 0.2% of AI-vs-AI time. Cost: ~0.06 ms a frame for both.
+  **And each other's weapon (2026-10-20):** each view publishes `rods` —
+  its weapon as shown, as capsules of its true thickness (`BladeShape.rods`:
+  the broom is a thin shaft + a fat bristle head; `r` stays the padded
+  furniture margin) — and one of the two gives way: a weapon in `HOLDS`
+  (idle, parry, lock — a cut stops on a guard) holds against one that
+  isn't, else the longer weapon gives (the broom). The giver avoids
+  `BladeWorld.rods`; where easing would leave it inside the other (a swing
+  outruns the ease) it's knocked straight to the goal. It also keeps its
+  side: `rodSide` (`crossSide`, where the two lines cross within both
+  weapons) blocks any turn onto the far side, so a fast swing that would
+  jump through it between frames pushes it along instead. Measured (AI vs
+  AI, 4 seeds × 3 min, frames within 3.5 m): weapons inside each other 237
+  → 2 frames (the hand itself inside the other), passing through 94 → 0
+  (102 → 0 at replay slow motion); the broom turns > 40° in 38 frames. The
+  settled lock already didn't cross.
 - `src/main.ts` owns input edge-detection, the fixed-timestep accumulator
   loop, and the HUD. Sim ticks and render frames are decoupled. Keyboard and
   gamepad (`gamepad.ts`, polled once per render frame; pad edges accumulate
