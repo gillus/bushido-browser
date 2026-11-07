@@ -1,4 +1,4 @@
-// Embedded in another game (Toret City's console, its arcades): loaded in
+// Embedded in another game (Toret City's console): loaded in
 // an iframe with `?embed=1`, the duel tells the page round it what happens
 // by postMessage, tagged with the protocol so nothing else posted counts.
 // The page can't hear keys pressed in here (Esc included), so leaving is
