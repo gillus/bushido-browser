@@ -25,6 +25,14 @@ Each future stage = a location + a dumb argument that went too far.
 
 ## Architecture (load-bearing rules)
 
+- **Embedded (`src/embed.ts`):** with `?embed=1` inside an iframe
+  (`EMBEDDED`), `tellHost` posts `ready` on load, `result` (`won`: P1 took
+  the match; `score`, P1 first) when the match banner goes up and `exit` on
+  Q while paused or at the banner, each tagged `PROTOCOL`
+  (`toret-minigame/1`, Toret City's console, `src/minigames/minigames.ts`
+  there; keep the two in step). The pause menu and the banner say Q leaves
+  only then. Standalone, nothing changes.
+
 - `src/sim/` is a **pure simulation**: fixed 60 Hz timestep, no rendering or
   DOM imports, no `Math.random` (the AI uses seeded mulberry32). This keeps
   the sim deterministic for future WebRTC lockstep netplay — online PvP is
