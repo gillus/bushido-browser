@@ -22,6 +22,7 @@ import { diffTick, GameEvent, snapshot } from './events';
 import { GamepadInput, PadRead } from './gamepad';
 import { Replay } from './replay';
 import { Vector3 } from 'three';
+import { EMBEDDED, tellHost } from './embed';
 
 const characters = charactersJson as Record<string, CharacterDef>;
 const weapons = weaponsJson as unknown as Record<string, WeaponDef>;
@@ -222,6 +223,15 @@ hud.help.hidden = helpPref === '0';
 let joined = 0; // seconds left on the "pad 2 joined" notice
 
 let paused = false;
+// embedded (src/embed.ts): Q leaves while paused or at the match banner
+if (EMBEDDED) {
+  const leave = document.createElement('div');
+  leave.className = 'menu';
+  leave.innerHTML = '<b>Q</b> leave the game';
+  hud.pause.append(leave);
+  hud.match.querySelector('.sub')!.textContent += ' · Q TO LEAVE';
+}
+
 function setPaused(on: boolean): void {
   paused = on;
   hud.pause.hidden = !on;
@@ -413,6 +423,7 @@ function frame(now: number): void {
     savePref('help', !hud.help.hidden);
   }
   if (key('KeyN')) sfx.toggleMute();
+  if (key('KeyQ') && (paused || matchUp >= 0)) tellHost({ type: 'exit' });
 
   const hold = (): void => {
     // the fight doesn't advance; presses made meanwhile don't reach it
@@ -443,6 +454,7 @@ function frame(now: number): void {
     hud.matchScore.textContent = `${sim.fighters[w].score} – ${sim.fighters[1 - w].score}`;
     hud.match.hidden = false;
     matchUp = 0;
+    tellHost({ type: 'result', won: w === 0, score: [sim.fighters[0].score, sim.fighters[1].score] });
   }
   if (matchUp >= 0) {
     matchUp += dt;
@@ -520,3 +532,4 @@ function frame(now: number): void {
 }
 
 requestAnimationFrame(frame);
+tellHost({ type: 'ready' });

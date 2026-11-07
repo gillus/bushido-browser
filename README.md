@@ -223,6 +223,23 @@ All content is plain JSON in `src/data/` — edit and the dev server hot-reloads
 Animation poses (joint Euler angles per stance / move phase) live in
 `src/render/poses.ts` — same idea, numbers you can tweak by hand.
 
+## Embedding
+
+The duel can be played inside another game, as on the console in
+[Toret City](https://github.com/gillus/toret_city)'s safehouse: load it in an
+iframe with `?embed=1`. Embedded, it posts to the page around it
+(`window.parent.postMessage`), every message tagged
+`protocol: "toret-minigame/1"`:
+
+- `{ type: "ready" }` once loaded;
+- `{ type: "result", won, score }` when a match is decided: `won` is whether
+  P1 (the player) won, `score` the kills, P1 first;
+- `{ type: "exit" }` when the player presses **Q** while paused or at the
+  match banner (the page around it can't hear keys pressed in here, Esc
+  included, so leaving is offered in the duel's own menus).
+
+Run alone, without `?embed=1` or outside an iframe, nothing changes.
+
 ## Architecture
 
 - `src/sim/` — pure simulation, no rendering imports. Fixed 60 Hz timestep,
